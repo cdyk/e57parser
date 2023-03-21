@@ -142,15 +142,19 @@ namespace {
       return false;
     }
 
-    if (!checkPage(ctx, page)) {
-      return false;
+    while (bytesToRead) {
+      if (!checkPage(ctx, page)) {
+        return false;
+      }
+      size_t bytesToReadFromPage = std::min(ctx.page.logicalSize - offsetInPage, bytesToRead);
+      ctx.logger(0, "copy %zu bytes from page %zu", bytesToReadFromPage, page);
+      std::memcpy(dst, ctx.begin + page * ctx.header.pageSize + offsetInPage, bytesToReadFromPage);
+      offsetInPage = 0;
+
+      dst += bytesToReadFromPage;
+      bytesToRead -= bytesToReadFromPage;
+      page++;
     }
-
-    size_t bytesToReadFromPage = std::min(ctx.page.logicalSize - offsetInPage, bytesToRead);
-
-
-
-
 
     return true;
   }
@@ -178,6 +182,8 @@ bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size)
   if (!read(ctx, xml.data(), ctx.header.xmlPhysicalOffset, ctx.header.xmlLogicalLength)) {
     return false;
   }
+
+  fwrite(xml.data(), 1, ctx.header.xmlLogicalLength, stderr);
 
   return true;
 }
