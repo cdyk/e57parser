@@ -1,6 +1,8 @@
+#include <bit>
 #include <cstring>
 #include <cstdint>
 #include <cinttypes>
+#include <algorithm>
 
 #include "Common.h"
 
@@ -21,6 +23,15 @@ namespace {
       uint64_t  xmlLogicalLength = 0;
       uint64_t  pageSize = 0;
     } header;
+
+    struct Page
+    {
+      size_t size = 0;
+      size_t logicalSize = 0;
+      size_t mask = 0;
+      uint8_t shift = 0;
+
+    } page;
 
   };
 
@@ -70,10 +81,79 @@ namespace {
                ctx.header.xmlPhysicalOffset, ctx.header.xmlLogicalLength,
                ctx.header.pageSize);
 
+    if ((ctx.header.pageSize == 0) || (ctx.header.pageSize & (ctx.header.pageSize - 1)) != 0) {
+      ctx.logger(2, "page size is not a power of 2");
+      return false;
+    }
+
+    ctx.page.size = static_cast<size_t>(ctx.header.pageSize);
+    ctx.page.logicalSize = ctx.page.size - sizeof(uint32_t);
+    ctx.page.mask = ctx.page.size - 1;
+    ctx.page.shift = static_cast<uint8_t>(std::countr_zero(ctx.header.pageSize));
+
+    ctx.logger(0, "pageSize=0x%zx pageMask=0x%zx pageShift=%u", ctx.page.size, ctx.page.mask, ctx.page.shift);
+
     return true;
   }
 
+  bool checkPage(Context& ctx, size_t page)
+  {
+    static bool first = true;
+    static uint32_t table[256];
+    if (first) {
+      const uint32_t polynomial = 0x82f63b78; // reflected 0x1EDC6F41
+      for (uint32_t n = 0; n < 256; n++) {
+        uint32_t c = n;
+        for (size_t k = 0; k < 8; k++) {
+          if (c & 1) {
+            c = polynomial ^ (c >> 1);
+          }
+          else {
+            c = c >> 1;
+          }
+        }
+        table[n] = c;
+      }
+    }
 
+    uint32_t crc = 0xFFFFFFFFu;
+    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(ctx.begin) + page * ctx.page.size;
+    for (size_t i = 0; i < ctx.page.logicalSize; i++) {
+      crc = (crc >> 8) ^ table[(crc ^ *ptr++) & 0xff];
+    }
+    crc ^= 0xFFFFFFFFu;
+
+    // For some reason the CRC calc above gets endian swapped, so we read this as big endian for now...
+    uint32_t crcRef = uint32_t(ptr[0]) << 24 | uint32_t(ptr[1]) << 16 | uint32_t(ptr[2]) << 8 | uint32_t(ptr[3]);
+    if (crc != crcRef) {
+      ctx.logger(2, "CRC error, expected 0x%8x, got 0x%8x", crcRef, crc);
+      return false;
+    }
+
+    return true;
+  }
+
+  bool read(Context& ctx, char* dst, size_t physicalOffset, size_t bytesToRead)
+  {
+    size_t page = physicalOffset >> ctx.page.shift;
+    size_t offsetInPage = physicalOffset & ctx.page.mask;
+    if (ctx.page.logicalSize <= offsetInPage) {
+      ctx.logger(2, "Physical offset %zu is outside page payload", physicalOffset);
+      return false;
+    }
+
+    if (!checkPage(ctx, page)) {
+      return false;
+    }
+
+    size_t bytesToReadFromPage = std::min(ctx.page.logicalSize - offsetInPage, bytesToRead);
+
+
+
+
+
+    return true;
+  }
 }
 
 
@@ -91,8 +171,13 @@ bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size)
     return false;
   }
 
-  
 
+  Buffer<char> xml;
+  xml.accommodate(ctx.header.xmlLogicalLength);
+
+  if (!read(ctx, xml.data(), ctx.header.xmlPhysicalOffset, ctx.header.xmlLogicalLength)) {
+    return false;
+  }
 
   return true;
 }

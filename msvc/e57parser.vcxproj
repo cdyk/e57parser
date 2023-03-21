@@ -74,6 +74,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\Common.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\src\e57Parser.cpp" />
   </ItemGroup>
