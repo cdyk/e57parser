@@ -47,3 +47,4 @@ struct Buffer : public BufferBase
 
 
 bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size);
+bool parseE57Xml(Logger logger, const char* xmlBytes, size_t xmlLength);
