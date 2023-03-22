@@ -1,3 +1,6 @@
+// This file is part of e57parser copyright 2023 Christopher Dyken
+// Released under the MIT license, please see LICENSE file for details.
+
 #ifdef _WIN32
 
 #define WIN32_LEAN_AND_MEAN
