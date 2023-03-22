@@ -75,6 +75,7 @@ typedef struct {
   cd_xml_namespace_binding_t* namespace_resolve_stack;    // Namespace-prefix bindings, most recent bindings last.
   cd_xml_flags_t              flags;                      //
   cd_xml_parse_status_t       status;                     // Either success or first error encountered.
+  bool                        activeCDATA;
 } cd_xml_parse_context_t;
 
 #define CD_XML_MIN(a,b) ((a)<(b)?(a):(b))
@@ -258,6 +259,25 @@ restart:
   }
 
   ctx->current.kind = (cd_xml_token_kind_t)ctx->chr.code;
+
+  if(ctx->activeCDATA) {
+    if (ctx->chr.code == ']') {
+      cd_xml_chr_state_t save = ctx->chr;
+      cd_xml_next_char(ctx);
+      if (ctx->chr.code == ']') {
+        cd_xml_next_char(ctx);
+        if (ctx->chr.code == '>') {
+          ctx->activeCDATA = false;
+          cd_xml_next_char(ctx);
+          goto restart;
+        }
+      }
+      ctx->chr = save;
+    }
+    cd_xml_next_char(ctx);
+    goto done;
+  }
+
   switch (ctx->chr.code) {
   case ' ':           // skip space
   case '\t':
@@ -322,6 +342,31 @@ restart:
           ctx->current.text.end = ctx->chr.text.begin;
           cd_xml_report_error(ctx, ctx->current.text.begin, ctx->current.text.end, "EOF while scanning for end of XML comment");
           return false;
+        }
+      }
+      else if (ctx->chr.code == '[') {
+        cd_xml_next_char(ctx);
+
+        // Handle <![CDATA[ .... ]]>
+        if (ctx->chr.code == 'C') {
+          cd_xml_next_char(ctx);
+          if (ctx->chr.code == 'D') {
+            cd_xml_next_char(ctx);
+            if (ctx->chr.code == 'A') {
+              cd_xml_next_char(ctx);
+              if (ctx->chr.code == 'T') {
+                cd_xml_next_char(ctx);
+                if (ctx->chr.code == 'A') {
+                  cd_xml_next_char(ctx);
+                  if (ctx->chr.code == '[') {
+                    cd_xml_next_char(ctx);
+                    ctx->activeCDATA = true;
+                    goto restart;
+                  }
+                }
+              }
+            }
+          }
         }
       }
       ctx->chr = save;
@@ -1099,7 +1144,8 @@ cd_xml_parse_status_t cd_xml_init_and_parse(cd_xml_doc_t** doc,
       },
       .namespace_default = cd_xml_no_ix,
       .flags = flags,
-      .status = CD_XML_STATUS_SUCCESS
+      .status = CD_XML_STATUS_SUCCESS,
+      .activeCDATA = false
   };
 
   if (cd_xml_next_char(&ctx) && cd_xml_next_token(&ctx)) {
