@@ -83,6 +83,7 @@
   <ItemGroup>
     <ClInclude Include="..\src\cd_xml.h" />
     <ClInclude Include="..\src\Common.h" />
+    <ClInclude Include="..\src\e57File.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

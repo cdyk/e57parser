@@ -9,6 +9,7 @@
 #include <cassert>
 
 #include "Common.h"
+#include "e57File.h"
 #include "cd_xml.h"
 
 
@@ -16,6 +17,7 @@ namespace {
 
   struct Context
   {
+    E57File* e57File = nullptr;
     Logger logger = nullptr;
     const char* begin = nullptr;
     const char* end = nullptr;
@@ -169,10 +171,11 @@ namespace {
 bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size)
 {
 
-  Context ctx {
+  Context ctx{
+    .e57File = new E57File,
     .logger = logger,
     .begin = ptr,
-    .end = ptr + size
+    .end = ptr + size,
   };
 
   if (!parseHeader(ctx)) {
@@ -192,7 +195,7 @@ bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size)
   ctx.logger(0, "----");
 #endif
 
-  if (!parseE57Xml(logger, xml.data(), ctx.header.xmlLogicalLength)) {
+  if (!parseE57Xml(ctx.e57File, logger, xml.data(), ctx.header.xmlLogicalLength)) {
     return false;
   }
 
