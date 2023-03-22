@@ -94,5 +94,13 @@ struct ListHeader : public UninitializedListHeader<T>
 {
   ListHeader() { UninitializedListHeader<T>::init(); }
 };
+
+template<typename T>
+struct View
+{
+  T* data = nullptr;
+  size_t count = 0;
+};
+
 bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size);
-bool parseE57Xml(Logger logger, const char* xmlBytes, size_t xmlLength);
+bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t xmlLength);
