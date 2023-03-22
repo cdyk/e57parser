@@ -940,7 +940,7 @@ static bool cd_xml_parse_element(cd_xml_parse_context_t* ctx, cd_xml_node_ix_t p
                            elem_ix,
                            ctx->flags);
     }
-
+    cd_xml_sb_free(ctx->attribute_stash);
 
     if (cd_xml_parse_element_contents(ctx, &elem_ns, &elem_name, elem_ix)) {
       cd_xml_sb_shrink(ctx->namespace_resolve_stack, parent_bind_stack_height);
