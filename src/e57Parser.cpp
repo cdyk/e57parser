@@ -3,8 +3,10 @@
 #include <cstdint>
 #include <cinttypes>
 #include <algorithm>
+#include <cassert>
 
 #include "Common.h"
+#include "cd_xml.h"
 
 
 namespace {
@@ -184,6 +186,32 @@ bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size)
   }
 
   fwrite(xml.data(), 1, ctx.header.xmlLogicalLength, stderr);
+  cd_xml_doc_t* doc = nullptr;
+  if (cd_xml_parse_status_t status = cd_xml_init_and_parse(&doc,
+                                                           xml.data(),
+                                                           ctx.header.xmlLogicalLength,
+                                                           CD_XML_FLAGS_NONE); status != CD_XML_STATUS_SUCCESS)
+  {
+    const char* what = nullptr;
+    switch (status)
+    {
+    case CD_XML_STATUS_POINTER_NOT_NULL:          what = "Doc-pointer passed to parser was not NULL."; break;
+    case CD_XML_STATUS_UNKNOWN_NAMESPACE_PREFIX:  what = "Element or attribute with namespace prefix that hasn't been defined."; break;
+    case CD_XML_STATUS_UNSUPPORTED_VERSION:       what = "XML version is not 1.0."; break;
+    case CD_XML_STATUS_UNSUPPORTED_ENCODING:      what = "XML encoding is not ASCII or UTF-8"; break;
+    case CD_XML_STATUS_MALFORMED_UTF8:            what = "Illegal UTF-8 encoding encountered."; break;
+    case CD_XML_STATUS_MALFORMED_ATTRIBUTE:       what = "Error while parsing an attribute."; break;
+    case CD_XML_STATUS_PREMATURE_EOF:             what = "Encountered end-of-buffer before parsing was done."; break;
+    case CD_XML_STATUS_MALFORMED_DECLARATION:     what = "Error in the initial XML declaration."; break;
+    case CD_XML_STATUS_UNEXPECTED_TOKEN:          what = "Encountered unexpected token."; break;
+    case CD_XML_STATUS_MALFORMED_ENTITY:          what = "Error while parsing an entity."; break;
+    default:  assert(false && "Invalid status enum");    break;
+    }
+
+    ctx.logger(2, "Failed to parse xml: %s", what);
+    return false;
+  }
+
 
   return true;
 }

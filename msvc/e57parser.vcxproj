@@ -74,11 +74,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\cd_xml.c" />
     <ClCompile Include="..\src\Common.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\src\e57Parser.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\src\cd_xml.h" />
     <ClInclude Include="..\src\Common.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
