@@ -65,5 +65,34 @@ struct Arena
 };
 
 
+
+template<typename T>
+struct UninitializedListHeader
+{
+  T* first;
+  T* last;
+
+  void init()
+  {
+    first = last = nullptr;
+  }
+
+  void pushBack(T* item)
+  {
+    if (first == nullptr) {
+      first = last = item;
+    }
+    else {
+      last->next = item;
+      last = item;
+    }
+  }
+};
+
+template<typename T>
+struct ListHeader : public UninitializedListHeader<T>
+{
+  ListHeader() { UninitializedListHeader<T>::init(); }
+};
 bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size);
 bool parseE57Xml(Logger logger, const char* xmlBytes, size_t xmlLength);
