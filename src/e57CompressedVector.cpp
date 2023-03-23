@@ -152,26 +152,31 @@ bool parseE57CompressedVector(const E57File* e57, Logger logger, size_t pointsIn
   // Bytelength of whole section
   size_t sectionLogicalLength = readUint64LE(ptr); 
 
+  // Calculate section end 
+  size_t sectionPhysicalEnd = 0;
+  {
+    size_t sectionLogicalOffset = ((points.fileOffset >> e57->page.shift) * e57->page.logicalSize +
+                                   (points.fileOffset & e57->page.mask));
+
+    size_t sectionLogicalEnd = sectionLogicalOffset + sectionLogicalLength;
+
+    sectionPhysicalEnd = ((sectionLogicalEnd / e57->page.logicalSize) * e57->page.size +
+                          (sectionLogicalEnd % e57->page.logicalSize));
+  }
+
   // Offset of first datapacket
   size_t dataPhysicalOffset = readUint64LE(ptr);
-  size_t dataPhysicalOffset_ = dataPhysicalOffset;
 
   // Offset of first index packet
   size_t indexPhysicalOffset = readUint64LE(ptr);
 
-  logger(2, "sectionLogicalLength=0x%zx dataPhysicalOffset=0x%zx indexPhysicalOffset=%zx",
-         sectionLogicalLength, dataPhysicalOffset, indexPhysicalOffset);
+  logger(2, "sectionLogicalLength=0x%zx dataPhysicalOffset=0x%zx indexPhysicalOffset=%zx sectionPhysicalEnd=0x%zx",
+         sectionLogicalLength, dataPhysicalOffset, indexPhysicalOffset, sectionPhysicalEnd);
 
-  size_t logicalBytesRead = 0;
-  for (size_t i = 0; i < 5; i++) {
-    ctx.logger(0, "dataPhysicalOffset=0x%zx", dataPhysicalOffset);
+  while(dataPhysicalOffset < sectionPhysicalEnd) {
     if (!readPacket(ctx, dataPhysicalOffset)) {
       return false;
     }
-    logicalBytesRead += ctx.packet.size;
   }
-
-  ctx.logger(0, "diff=%zu / %zu", sectionLogicalLength - logicalBytesRead, (dataPhysicalOffset - dataPhysicalOffset_) - sectionLogicalLength);
-
   return true;
 }
