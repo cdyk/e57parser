@@ -87,6 +87,14 @@ struct UninitializedListHeader
     first = last = nullptr;
   }
 
+  // Number of items in list, linear complexity.
+  size_t size()
+  {
+    size_t rv = 0;
+    for (T* item = first; item; item = item->next) { rv++; }
+    return rv;
+  }
+
   void pushBack(T* item)
   {
     if (first == nullptr) {
