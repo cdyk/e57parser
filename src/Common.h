@@ -114,10 +114,20 @@ struct ListHeader : public UninitializedListHeader<T>
 };
 
 template<typename T>
-struct View
+struct UninitializedView
 {
-  T* data = nullptr;
-  size_t count = 0;
+  T* data;
+  size_t size;
+
+  void init() { data = nullptr; size = 0; }
+  T& operator[](size_t ix) noexcept { assert(data && (ix < size)); return data[ix]; }
+  const T& operator[](size_t ix) const noexcept { assert(data && (ix < size)); return data[ix]; }
+};
+
+template<typename T>
+struct View : public UninitializedView<T>
+{
+  View() { UninitializedView<T>::init(); }
 };
 
 bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size);
