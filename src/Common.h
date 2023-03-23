@@ -63,6 +63,15 @@ struct Arena
   void clear();
 
   template<typename T> T* alloc() { return new(alloc(sizeof(T))) T(); }
+
+  template<typename T> T* allocArray(size_t arrayLength)
+  {
+    T* p = static_cast<T*>(alloc(sizeof(T) * arrayLength));
+    for (size_t i = 0; i < arrayLength; ++i) {
+      new(p + i) T();
+    }
+    return p;
+  }
 };
 
 
