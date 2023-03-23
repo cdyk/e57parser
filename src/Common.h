@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cassert>
 
 typedef void(*Logger)(unsigned level, const char* msg, ...);
 

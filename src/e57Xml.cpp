@@ -10,6 +10,8 @@
 #include <string>
 
 namespace {
+  
+  const char* spaces = "                                                                  ";
 
   struct CartesianBoundsData {
     float xMin;
@@ -48,6 +50,7 @@ namespace {
       Component component;
       struct {
         UninitializedListHeader<Element> components;
+        Points points;
       } points;
     };
 
@@ -83,70 +86,6 @@ namespace {
     ListHeader<Element> points;
     Arena arena;
   };
-
-  Element::Kind elementKind(cd_xml_stringview_t* name)
-  {
-    std::string key(name->begin, name->end);
-
-    if (key == "e57Root") {
-      return Element::Kind::E57Root;
-    }
-    else if (key == "data3D") {
-      return Element::Kind::Data3D;
-    }
-    if (key == "vectorChild") {
-      return Element::Kind::VectorChild;
-    }
-    else if (key == "name") {
-      return Element::Kind::Name;
-    }
-    else if (key == "cartesianBounds") {
-      return Element::Kind::CartesianBounds;
-    }
-    else if (key == "xMinimum") {
-      return Element::Kind::XMin;
-    }
-    else if (key == "xMaximum") {
-      return Element::Kind::XMax;
-    }
-    else if (key == "yMinimum") {
-      return Element::Kind::YMin;
-    }
-    else if (key == "yMaximum") {
-      return Element::Kind::YMax;
-    }
-    else if (key == "zMinimum") {
-      return Element::Kind::ZMin;
-    }
-    else if (key == "zMaximum") {
-      return Element::Kind::ZMax;
-    }
-    else if (key == "points") {
-      return Element::Kind::Points;
-    }
-    else if (key == "prototype") {
-      return Element::Kind::Prototype;
-    }
-
-    else if (key == "cartesianX") {
-      return Element::Kind::Component;
-    }
-    else if (key == "cartesianY") {
-      return Element::Kind::Component;
-    }
-    else if (key == "cartesianZ") {
-      return Element::Kind::Component;
-    }
-    else if (key == "cartesianInvalidState") {
-      return Element::Kind::Component;
-    }
-
-    else if (key == "images2D") {
-      return Element::Kind::Images2D;
-    }
-
-    return Element::Kind::Unknown;
-  }
 
   bool parseNumber(float& dst, const cd_xml_stringview_t* text)
   {
@@ -187,57 +126,84 @@ namespace {
     return true;
   }
 
+  bool parseNumber(size_t& dst, const cd_xml_stringview_t* text)
+  {
+    const std::string str(text->begin, text->end);
+    try {
+      dst = std::strtoull(str.c_str(), nullptr, 10);
+      return true;
+    }
+    catch (...) {
+      return false;
+    }
+    return true;
+  }
+
 
   bool xmlElementEnter(void* userdata, cd_xml_doc_t* doc, cd_xml_ns_ix_t namespace_ix, cd_xml_stringview_t* name)
   {
     Context& ctx = *reinterpret_cast<Context*>(userdata);
+    ctx.logger(0, "%.*s%.*s:", int(ctx.stack.size()), spaces, int(name->end - name->begin), name->begin);
 
-    ctx.logger(0, "%.*s%.*s:", int(ctx.stack.size()), "                                                 ", int(name->end - name->begin), name->begin);
+    Element& elem = *ctx.stack.emplace_back(ctx.arena.alloc<Element>());
 
-    ctx.stack.emplace_back(ctx.arena.alloc<Element>());
-    ctx.stack.back()->kind = elementKind(name);
+    std::string_view key(name->begin, name->end);
+    if (key == "cartesianBounds") {             elem.kind = Element::Kind::CartesianBounds; }
+    else if (key == "points") {                 elem.kind = Element::Kind::Points; }
+    else if (key == "e57Root") {                elem.kind = Element::Kind::E57Root; }
+    else if (key == "data3D") {                 elem.kind = Element::Kind::Data3D; }
+    else if (key == "vectorChild") {            elem.kind = Element::Kind::VectorChild; }
+    else if (key == "name") {                   elem.kind = Element::Kind::Name; }
+    else if (key == "xMinimum") {               elem.kind = Element::Kind::XMin; }
+    else if (key == "xMaximum") {               elem.kind = Element::Kind::XMax; }
+    else if (key == "yMinimum") {               elem.kind = Element::Kind::YMin; }
+    else if (key == "yMaximum") {               elem.kind = Element::Kind::YMax; }
+    else if (key == "zMinimum") {               elem.kind = Element::Kind::ZMin; }
+    else if (key == "zMaximum") {               elem.kind = Element::Kind::ZMax; }
+    else if (key == "prototype") {              elem.kind = Element::Kind::Prototype; }
+    else if (key == "images2D") {               elem.kind = Element::Kind::Images2D; }
+    else if (key == "cartesianX") {             elem.kind = Element::Kind::Component; elem.component.role = Component::Role::CartesianX; }
+    else if (key == "cartesianY") {             elem.kind = Element::Kind::Component; elem.component.role = Component::Role::CartesianY; }
+    else if (key == "cartesianZ") {             elem.kind = Element::Kind::Component; elem.component.role = Component::Role::CartesianZ; }
+    else if (key == "sphericalRange") {         elem.kind = Element::Kind::Component; elem.component.role = Component::Role::SphericalRange; }
+    else if (key == "sphericalAzimuth") {       elem.kind = Element::Kind::Component; elem.component.role = Component::Role::SphericalAzimuth; }
+    else if (key == "sphericalElevation") {     elem.kind = Element::Kind::Component; elem.component.role = Component::Role::SphericalElevation; }
+    else if (key == "rowIndex") {               elem.kind = Element::Kind::Component; elem.component.role = Component::Role::RowIndex; }
+    else if (key == "columnIndex") {            elem.kind = Element::Kind::Component; elem.component.role = Component::Role::ColumnIndex; }
+    else if (key == "returnCount") {            elem.kind = Element::Kind::Component; elem.component.role = Component::Role::ReturnCount; }
+    else if (key == "returnIndex") {            elem.kind = Element::Kind::Component; elem.component.role = Component::Role::ReturnIndex; }
+    else if (key == "timeStamp") {              elem.kind = Element::Kind::Component; elem.component.role = Component::Role::TimeStamp; }
+    else if (key == "intensity") {              elem.kind = Element::Kind::Component; elem.component.role = Component::Role::Intensity; }
+    else if (key == "colorRed") {               elem.kind = Element::Kind::Component; elem.component.role = Component::Role::ColorRed; }
+    else if (key == "colorGreen") {             elem.kind = Element::Kind::Component; elem.component.role = Component::Role::ColorGreen; }
+    else if (key == "colorBlue") {              elem.kind = Element::Kind::Component; elem.component.role = Component::Role::ColorBlue; }
+    else if (key == "cartesianInvalidState") {  elem.kind = Element::Kind::Component; elem.component.role = Component::Role::CartesianInvalidState; }
+    else if (key == "sphericalInvalidState") {  elem.kind = Element::Kind::Component; elem.component.role = Component::Role::SphericalInvalidState; }
+    else if (key == "isTimeStampInvalid") {     elem.kind = Element::Kind::Component; elem.component.role = Component::Role::IsTimeStampInvalid; }
+    else if (key == "isColorInvalid") {         elem.kind = Element::Kind::Component; elem.component.role = Component::Role::IsColorInvalid; }
+    else { elem.kind = Element::Kind::Unknown; }
 
-    switch (ctx.stack.back()->kind) {
+
+    switch (elem.kind) {
+
+    case Element::Kind::Points:
+      elem.points.components.init();
+      elem.points.points.init();
+      break;
+
     case Element::Kind::CartesianBounds:
-      ctx.stack.back()->cartesianBounds = CartesianBoundsData{
+      elem.cartesianBounds = CartesianBoundsData{
         .xMin = std::numeric_limits<float>::max(), .xMax = -std::numeric_limits<float>::max(),
         .yMin = std::numeric_limits<float>::max(), .yMax = -std::numeric_limits<float>::max(),
         .zMin = std::numeric_limits<float>::max(), .zMax = -std::numeric_limits<float>::max()
       };
       break;
-    case Element::Kind::Points:
-      ctx.stack.back()->points = {
-        .components = {}
-      };
-      break;
-    case Element::Kind::Component:
 
-      Component::Role role = Component::Role::Count;
-      std::string_view key(name->begin, name->end);
-      if(key == "CartesianX") { role = Component::Role::Count; }
-      else if (key == "CartesianY") { role = Component::Role::Count; }
-      else if (key == "CartesianZ") { role = Component::Role::Count; }
-      else if (key == "SphericalRange") { role = Component::Role::Count; }
-      else if (key == "SphericalAzimuth") { role = Component::Role::Count; }
-      else if (key == "SphericalElevation") { role = Component::Role::Count; }
-      else if (key == "RowIndex") { role = Component::Role::Count; }
-      else if (key == "ColumnIndex") { role = Component::Role::Count; }
-      else if (key == "ReturnCount") { role = Component::Role::Count; }
-      else if (key == "ReturnIndex") { role = Component::Role::Count; }
-      else if (key == "TimeStamp") { role = Component::Role::Count; }
-      else if (key == "Intensity") { role = Component::Role::Count; }
-      else if (key == "ColorRed") { role = Component::Role::Count; }
-      else if (key == "ColorGreen") { role = Component::Role::Count; }
-      else if (key == "ColorBlue") { role = Component::Role::Count; }
-      else if (key == "CartesianInvalidState") { role = Component::Role::Count; }
-      else if (key == "SphericalInvalidState") { role = Component::Role::Count; }
-      else if (key == "IsTimeStampInvalid") { role = Component::Role::Count; }
-      else if (key == "IsIntensityInvalid") { role = Component::Role::Count; }
-      else if (key == "IsColorInvalid") { role = Component::Role::Count; }
-      ctx.stack.back()->component = {
-        .role = role,
-        .type = Component::Type::Count,
-      };
+    case Element::Kind::Component:
+      elem.component.type = Component::Type::Count;
+      break;
+
+    default:
       break;
     }
 
@@ -247,30 +213,29 @@ namespace {
   bool xmlElementExit(void* userdata, cd_xml_doc_t* doc, cd_xml_ns_ix_t namespace_ix, cd_xml_stringview_t* name)
   {
     Context& ctx = *reinterpret_cast<Context*>(userdata);
-    assert(!ctx.stack.empty());
-    assert(ctx.stack.back()->kind == elementKind(name));
-    Element* element = ctx.stack.back();
-
     size_t N = ctx.stack.size();
+    assert(N != 0);
 
-    switch (element->kind) {
+    Element* elem = ctx.stack.back();
+
+    switch (elem->kind) {
     case Element::Kind::CartesianBounds:
       ctx.logger(0, ">>> Parsed cartesian bounds [%.2f %.2f %.2f] x [%.2f %.2f %.2f]:",
-                 ctx.stack.back()->cartesianBounds.xMin, ctx.stack.back()->cartesianBounds.yMin, ctx.stack.back()->cartesianBounds.zMin,
-                 ctx.stack.back()->cartesianBounds.xMax, ctx.stack.back()->cartesianBounds.yMax, ctx.stack.back()->cartesianBounds.zMax);
+                 elem->cartesianBounds.xMin, elem->cartesianBounds.yMin, elem->cartesianBounds.zMin,
+                 elem->cartesianBounds.xMax, elem->cartesianBounds.yMax, elem->cartesianBounds.zMax);
       break;
 
     case Element::Kind::Points:
-      ctx.points.pushBack(element);
+      ctx.points.pushBack(elem);
       break;
 
     case Element::Kind::Component:
       if (3 <= N && ctx.stack[N - 2]->kind == Element::Kind::Prototype && ctx.stack[N - 3]->kind == Element::Kind::Points) {
         Element* points = ctx.stack[N - 3];
-        points->points.components.pushBack(element);
+        points->points.components.pushBack(elem);
       }
       else {
-        ctx.logger(2, "Unexpected %s", elementKindString[static_cast<size_t>(element->kind)]);
+        ctx.logger(2, "Unexpected %s", elementKindString[static_cast<size_t>(elem->kind)]);
         return false;
       }
       break;
@@ -281,6 +246,82 @@ namespace {
     return true;
   }
 
+  bool xmlAttributeComponent(Context& ctx, Component& component, cd_xml_doc_t* doc, cd_xml_ns_ix_t namespace_ix, cd_xml_stringview_t* name, cd_xml_stringview_t* val)
+  {
+    std::string_view key(name->begin, name->end);
+    if (key == "type") {
+      std::string_view value(val->begin, val->end);
+      if (value == "ScaledInteger") {
+        component.initScaledInteger();
+      }
+      else if (value == "Integer") {
+        component.initInteger();
+      }
+      else {
+        ctx.logger(2, "Unexpected component type %.*s", int(value.size()), value.data());
+        return false;
+      }
+    }
+
+    else if (key == "minimum") {
+      switch (component.type) {
+      case Component::Type::ScaledInteger:  return parseNumber(component.scaledInteger.min, val);
+      case Component::Type::Integer:        return parseNumber(component.integer.min, val);
+      default:
+        ctx.logger(2, "Attribute 'minimum' not valid for component type %u", uint32_t(component.type));
+        return false;
+      }
+    }
+
+    else if (key == "maximum") {
+      switch (component.type) {
+      case Component::Type::ScaledInteger:  return parseNumber(component.scaledInteger.max, val);
+      case Component::Type::Integer:        return parseNumber(component.integer.max, val);
+      default:
+        ctx.logger(2, "Attribute 'maximum' not valid for component type %u", uint32_t(component.type));
+        return false;
+      }
+    }
+
+    else if (key == "scale") {
+      switch (component.type) {
+      case Component::Type::ScaledInteger:  return parseNumber(component.scaledInteger.scale, val);
+      default:
+        ctx.logger(2, "Attribute 'scale' not valid for component type %u", uint32_t(component.type));
+        return false;
+      }
+    }
+
+    else if (key == "offset") {
+      switch (component.type) {
+      case Component::Type::ScaledInteger:  return parseNumber(component.scaledInteger.offset, val);
+      default:
+        ctx.logger(2, "Attribute 'offset' not valid for component type %u", uint32_t(component.type));
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool xmlAttributePoints(Context& ctx, Points& points, cd_xml_doc_t* doc, cd_xml_ns_ix_t namespace_ix, cd_xml_stringview_t* name, cd_xml_stringview_t* val)
+  {
+    std::string_view key(name->begin, name->end);
+    if (key == "type") {
+      if (std::string_view(val->begin, val->end) == "CompressedVector") { return true; }
+    }
+    if (key == "fileOffset") {
+      return parseNumber(points.fileOffset, val);
+    }
+    else if (key == "recordCount") {
+      return parseNumber(points.recordCount, val);
+    }
+    ctx.logger(2, "In <points>, unexpected attribute %.*s='%.*s'",
+               int(name->end - name->begin), name->begin,
+               int(val->end - val->begin), val->begin);
+    return false;
+  }
+
+
   bool xmlAttribute(void* userdata, cd_xml_doc_t* doc, cd_xml_ns_ix_t namespace_ix, cd_xml_stringview_t* name, cd_xml_stringview_t* val)
   {
     Context& ctx = *reinterpret_cast<Context*>(userdata);
@@ -288,74 +329,14 @@ namespace {
     Element* element = ctx.stack.back();
 
     std::string_view key(name->begin, name->end);
-
     switch (element->kind) {
     case Element::Kind::Component:
-      if (key == "type") {
-        std::string_view value(val->begin, val->end);
-        if (value == "ScaledInteger") {
-          element->component.type = Component::Type::ScaledInteger;
-          element->component.scaledInteger.min = std::numeric_limits<int32_t>::max();
-          element->component.scaledInteger.max = std::numeric_limits<int32_t>::min();
-          element->component.scaledInteger.scale = 1.0;
-          element->component.scaledInteger.offset = 0.0;
-        }
-        else if (value == "Integer") {
-          element->component.type = Component::Type::Integer;
-          element->component.integer.min = std::numeric_limits<int32_t>::max();
-          element->component.integer.max = std::numeric_limits<int32_t>::min();
-        }
-        else {
-          ctx.logger(2, "Unexpected component type %.*s", int(value.size()), value.data());
-          return false;
-        }
-      }
-
-      else if (key == "minimum") {
-        switch (element->component.type) {
-        case Component::Type::ScaledInteger:  return parseNumber(element->component.scaledInteger.min, val);
-        case Component::Type::Integer:        return parseNumber(element->component.integer.min, val);
-        default:
-          ctx.logger(2, "Attribute 'minimum' not valid for component type %u", uint32_t(element->component.type));
-          return false;
-        }
-      }
-
-      else if (key == "maximum") {
-        switch (element->component.type) {
-        case Component::Type::ScaledInteger:  return parseNumber(element->component.scaledInteger.max, val);
-        case Component::Type::Integer:        return parseNumber(element->component.integer.max, val);
-        default:
-          ctx.logger(2, "Attribute 'maximum' not valid for component type %u", uint32_t(element->component.type));
-          return false;
-        }
-      }
-
-      else if (key == "scale") {
-        switch (element->component.type) {
-        case Component::Type::ScaledInteger:  return parseNumber(element->component.scaledInteger.scale, val);
-        default:
-          ctx.logger(2, "Attribute 'scale' not valid for component type %u", uint32_t(element->component.type));
-          return false;
-        }
-      }
-
-      else if (key == "offset") {
-        switch (element->component.type) {
-        case Component::Type::ScaledInteger:  return parseNumber(element->component.scaledInteger.offset, val);
-        default:
-          ctx.logger(2, "Attribute 'offset' not valid for component type %u", uint32_t(element->component.type));
-          return false;
-        }
-      }
-
-      break;
-
+      return xmlAttributeComponent(ctx, element->component, doc, namespace_ix, name, val);
+    case Element::Kind::Points:
+      return xmlAttributePoints(ctx, element->points.points, doc, namespace_ix, name, val);
     default:
       break;
     }
-
-
     return true;
   }
 
@@ -363,7 +344,7 @@ namespace {
   bool xmlText(void* userdata, cd_xml_doc_t* doc, cd_xml_stringview_t* text)
   {
     Context& ctx = *reinterpret_cast<Context*>(userdata);
-    ctx.logger(0, "%.*sText %.*s", int(ctx.stack.size()), "                                                 ", int(text->end - text->begin), text->begin);
+    ctx.logger(0, "%.*sText %.*s", int(ctx.stack.size()), spaces, int(text->end - text->begin), text->begin);
 
     size_t N = ctx.stack.size();
 
@@ -429,17 +410,46 @@ bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t x
   }
   ctx.logger(0, "XML parsed successfully");
 
-  for (Element* points = ctx.points.first; points; points = points->next) {
-    ctx.logger(0, ">>> Parsed point prototype:");
-    for (const Element* elem = points->points.components.first; elem; elem = elem->next) {
-      assert(elem->kind == Element::Kind::Component);
-      ctx.logger(0, "    + role=%u type=%u", static_cast<uint32_t>(elem->component.role), static_cast<uint32_t>(elem->component.type));
+  ctx.e57File->points.size = ctx.points.size();
+  ctx.e57File->points.data = ctx.e57File->arena.allocArray<Points>(ctx.e57File->points.size);
+
+  size_t pointIx = 0;
+  for (Element* srcPoints = ctx.points.first; srcPoints; srcPoints = srcPoints->next) {
+    assert(srcPoints->kind == Element::Kind::Points);
+
+    Points& dstPoints = ctx.e57File->points[pointIx++];
+    dstPoints = srcPoints->points.points;
+    dstPoints.components.size = srcPoints->points.components.size();
+    dstPoints.components.data = ctx.e57File->arena.allocArray<Component>(dstPoints.components.size);
+
+    size_t compIx = 0;
+    for (const Element* srcComp = srcPoints->points.components.first; srcComp; srcComp = srcComp->next) {
+      assert(srcComp->kind == Element::Kind::Component);
+
+      Component& dstComp = dstPoints.components[compIx++];
+      dstComp = srcComp->component;
     }
   }
 
-
-
-
+  ctx.logger(0, "Parsed points");
+  for (size_t j = 0; j < ctx.e57File->points.size; j++) {
+    const Points& points = ctx.e57File->points[j];
+    ctx.logger(0, "%zu: fileOffset=%zu recordCount=%zu", j, points.fileOffset, points.recordCount);
+    for (size_t i = 0; i < points.components.size; i++) {
+      const Component& comp = points.components[i];
+      switch (comp.type) {
+      case Component::Type::Integer:
+        ctx.logger(0, "   %zu: integer min=%d max=%d", i, comp.integer.min, comp.integer.max);
+        break;
+      case Component::Type::ScaledInteger:
+        ctx.logger(0, "   %zu: scaled integer min=%d max=%d scale=%f offset=%f", i, comp.scaledInteger.min, comp.scaledInteger.max, comp.scaledInteger.scale, comp.scaledInteger.offset);
+        break;
+      default:
+        assert(false);
+        break;
+      }
+    }
+  }
 
   return true;
 }

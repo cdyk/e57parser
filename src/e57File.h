@@ -53,14 +53,17 @@ struct Component
 
   };
 
+  void initInteger();
+  void initScaledInteger();
 };
 
 struct Points
 {
-  size_t fileOffset = 0;
-  size_t pointCount = 0;
-  View<Component> components{};
-  size_t componentCount = 0;
+  size_t fileOffset;
+  size_t recordCount;
+  UninitializedView<Component> components;
+
+  void init() { fileOffset = 0; recordCount = 0; components.init(); }
 };
 
 struct E57File

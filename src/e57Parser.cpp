@@ -168,6 +168,20 @@ namespace {
 
 }
 
+void Component::initInteger() {
+  type = Type::Integer;
+  integer.min = std::numeric_limits<int32_t>::max();
+  integer.max = std::numeric_limits<int32_t>::min();
+}
+
+void Component::initScaledInteger() {
+  type = Type::ScaledInteger;
+  scaledInteger.min = std::numeric_limits<int32_t>::max();
+  scaledInteger.max = std::numeric_limits<int32_t>::min();
+  scaledInteger.scale = 1.0;
+  scaledInteger.offset = 0.0;
+}
+
 bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size)
 {
 
