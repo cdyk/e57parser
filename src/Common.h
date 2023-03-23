@@ -14,6 +14,12 @@ void* xmalloc(size_t size);
 void* xcalloc(size_t count, size_t size);
 void* xrealloc(void* ptr, size_t size);
 
+inline uint16_t getUint16LE(const void* ptr)
+{
+  const uint8_t* q = reinterpret_cast<const uint8_t*>(ptr);
+  return uint16_t(size_t(q[1]) << 8 | size_t(q[0]));
+}
+
 inline uint32_t readUint32LE(const char*& curr)
 {
   const uint8_t* q = reinterpret_cast<const uint8_t*>(curr);
@@ -151,6 +157,6 @@ struct View : public UninitializedView<T>
 };
 
 E57File* openE57(Logger logger, View<const char>& bytes);
-bool readE57Bytes(const E57File* e57, Logger logger, char* dst, size_t& physicalOffset, size_t bytesToRead);
+bool readE57Bytes(const E57File* e57, Logger logger, void* dst, size_t& physicalOffset, size_t bytesToRead);
 bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t xmlLength);
 bool parseE57CompressedVector(const E57File* e57File, Logger logger, size_t pointsIndex);

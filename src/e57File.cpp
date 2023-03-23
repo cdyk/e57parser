@@ -116,7 +116,7 @@ namespace {
 
 }
 
-bool readE57Bytes(const E57File* e57, Logger logger, char* dst, size_t& physicalOffset, size_t bytesToRead)
+bool readE57Bytes(const E57File* e57, Logger logger, void* dst_, size_t& physicalOffset, size_t bytesToRead)
 {
   size_t page = physicalOffset >> e57->page.shift;
   size_t offsetInPage = physicalOffset & e57->page.mask;
@@ -125,13 +125,17 @@ bool readE57Bytes(const E57File* e57, Logger logger, char* dst, size_t& physical
     return false;
   }
 
+  char* dst = static_cast<char*>(dst_);
   while (bytesToRead) {
     if (!checkPage(e57, logger, page)) {
       return false;
     }
     size_t bytesToReadFromPage = std::min(e57->page.logicalSize - offsetInPage, bytesToRead);
+#if 0
     logger(0, "copy %zu bytes from page %zu", bytesToReadFromPage, page);
+#endif
     std::memcpy(dst, e57->bytes.data + page * e57->header.pageSize + offsetInPage, bytesToReadFromPage);
+    physicalOffset = page * e57->header.pageSize + offsetInPage + bytesToReadFromPage;
     offsetInPage = 0;
 
     dst += bytesToReadFromPage;
@@ -139,7 +143,6 @@ bool readE57Bytes(const E57File* e57, Logger logger, char* dst, size_t& physical
     page++;
   }
 
-  physicalOffset = page * e57->header.pageSize + offsetInPage;
   return true;
 }
 
