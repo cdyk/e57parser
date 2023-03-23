@@ -10,15 +10,27 @@
     <ClCompile Include="..\src\main.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\e57Parser.cpp">
+    <ClCompile Include="..\src\e57File.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="..\src\Common.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\cd_xml.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\e57Xml.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\Common.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\cd_xml.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\e57File.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>
