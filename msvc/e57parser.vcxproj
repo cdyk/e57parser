@@ -76,6 +76,7 @@
   <ItemGroup>
     <ClCompile Include="..\src\cd_xml.c" />
     <ClCompile Include="..\src\Common.cpp" />
+    <ClCompile Include="..\src\e57CompressedVector.cpp" />
     <ClCompile Include="..\src\e57Xml.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\src\e57File.cpp" />

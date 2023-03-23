@@ -7,6 +7,7 @@
 #include <cinttypes>
 #include <algorithm>
 #include <cassert>
+#include <memory>
 
 #include "Common.h"
 #include "e57File.h"
@@ -15,34 +16,7 @@
 
 namespace {
 
-  struct Context
-  {
-    E57File* e57File = nullptr;
-    Logger logger = nullptr;
-    const char* begin = nullptr;
-    const char* end = nullptr;
-
-    struct Header {
-      uint32_t  major = 0;
-      uint32_t  minor = 0;
-      uint64_t  filePhysicalLength = 0;
-      uint64_t  xmlPhysicalOffset = 0;
-      uint64_t  xmlLogicalLength = 0;
-      uint64_t  pageSize = 0;
-    } header;
-
-    struct Page
-    {
-      size_t size = 0;
-      size_t logicalSize = 0;
-      size_t mask = 0;
-      uint8_t shift = 0;
-
-    } page;
-
-  };
-
-  uint32_t readUint32LE(Context& ctx, const char*& curr)
+  uint32_t readUint32LE(const char*& curr)
   {
     const uint8_t* q = reinterpret_cast<const uint8_t*>(curr);
     uint32_t rv = uint32_t(q[3]) << 24 | uint32_t(q[2]) << 16 | uint32_t(q[1]) << 8 | uint32_t(q[0]);
@@ -50,7 +24,7 @@ namespace {
     return rv;
   }
 
-  uint64_t readUint64LE(Context& ctx, const char*& curr)
+  uint64_t readUint64LE(const char*& curr)
   {
     const uint8_t* q = reinterpret_cast<const uint8_t*>(curr);
     uint64_t rv =
@@ -60,50 +34,50 @@ namespace {
     return rv;
   }
 
-  bool parseHeader(Context& ctx)
+  bool parseHeader(E57File* e57, Logger logger)
   {
-    const char* curr = ctx.begin;
-    if (ctx.end < curr + 8 + 2 * 4 + 4 * 8) {
-      ctx.logger(2, "File smaller than e57 file header");
+    const char* curr = e57->bytes.data;
+    if (e57->bytes.size < 8 + 2 * 4 + 4 * 8) {
+      logger(2, "File smaller than e57 file header");
       return false;
     }
 
     if (std::memcmp("ASTM-E57", curr, 8) != 0) {
-      ctx.logger(2, "Wrong file signature");
+      logger(2, "Wrong file signature");
       return false;
     }
     curr += 8;
 
-    ctx.header.major = readUint32LE(ctx, curr);
-    ctx.header.minor = readUint32LE(ctx, curr);
+    e57->header.major = readUint32LE(curr);
+    e57->header.minor = readUint32LE(curr);
 
-    ctx.header.filePhysicalLength = readUint64LE(ctx, curr);
-    ctx.header.xmlPhysicalOffset = readUint64LE(ctx, curr);
-    ctx.header.xmlLogicalLength = readUint64LE(ctx, curr);
-    ctx.header.pageSize = readUint64LE(ctx, curr);
+    e57->header.filePhysicalLength = readUint64LE(curr);
+    e57->header.xmlPhysicalOffset = readUint64LE(curr);
+    e57->header.xmlLogicalLength = readUint64LE(curr);
+    e57->header.pageSize = readUint64LE(curr);
 
-    ctx.logger(0, "version=%" PRIu32 ".%" PRIu32 ", length=%" PRIu64 ", xmlOffset=%" PRIu64 ", xmlLength=%" PRIu64 ", pageSize=%" PRIu64,
-               ctx.header.major, ctx.header.minor,
-               ctx.header.filePhysicalLength,
-               ctx.header.xmlPhysicalOffset, ctx.header.xmlLogicalLength,
-               ctx.header.pageSize);
+    logger(0, "version=%" PRIu32 ".%" PRIu32 ", length=%" PRIu64 ", xmlOffset=%" PRIu64 ", xmlLength=%" PRIu64 ", pageSize=%" PRIu64,
+               e57->header.major, e57->header.minor,
+               e57->header.filePhysicalLength,
+               e57->header.xmlPhysicalOffset, e57->header.xmlLogicalLength,
+               e57->header.pageSize);
 
-    if ((ctx.header.pageSize == 0) || (ctx.header.pageSize & (ctx.header.pageSize - 1)) != 0) {
-      ctx.logger(2, "page size is not a power of 2");
+    if ((e57->header.pageSize == 0) || (e57->header.pageSize & (e57->header.pageSize - 1)) != 0) {
+      logger(2, "page size is not a power of 2");
       return false;
     }
 
-    ctx.page.size = static_cast<size_t>(ctx.header.pageSize);
-    ctx.page.logicalSize = ctx.page.size - sizeof(uint32_t);
-    ctx.page.mask = ctx.page.size - 1;
-    ctx.page.shift = static_cast<uint8_t>(std::countr_zero(ctx.header.pageSize));
+    e57->page.size = static_cast<size_t>(e57->header.pageSize);
+    e57->page.logicalSize = e57->page.size - sizeof(uint32_t);
+    e57->page.mask = e57->page.size - 1;
+    e57->page.shift = static_cast<uint8_t>(std::countr_zero(e57->header.pageSize));
 
-    ctx.logger(0, "pageSize=0x%zx pageMask=0x%zx pageShift=%u", ctx.page.size, ctx.page.mask, ctx.page.shift);
+    logger(0, "pageSize=0x%zx pageMask=0x%zx pageShift=%u", e57->page.size, e57->page.mask, e57->page.shift);
 
     return true;
   }
 
-  bool checkPage(Context& ctx, size_t page)
+  bool checkPage(const E57File* e57, Logger logger, size_t page)
   {
     static bool first = true;
     static uint32_t table[256];
@@ -124,8 +98,8 @@ namespace {
     }
 
     uint32_t crc = 0xFFFFFFFFu;
-    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(ctx.begin) + page * ctx.page.size;
-    for (size_t i = 0; i < ctx.page.logicalSize; i++) {
+    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(e57->bytes.data) + page * e57->page.size;
+    for (size_t i = 0; i < e57->page.logicalSize; i++) {
       crc = (crc >> 8) ^ table[(crc ^ *ptr++) & 0xff];
     }
     crc ^= 0xFFFFFFFFu;
@@ -133,40 +107,42 @@ namespace {
     // For some reason the CRC calc above gets endian swapped, so we read this as big endian for now...
     uint32_t crcRef = uint32_t(ptr[0]) << 24 | uint32_t(ptr[1]) << 16 | uint32_t(ptr[2]) << 8 | uint32_t(ptr[3]);
     if (crc != crcRef) {
-      ctx.logger(2, "CRC error, expected 0x%8x, got 0x%8x", crcRef, crc);
+      logger(2, "CRC error, expected 0x%8x, got 0x%8x", crcRef, crc);
       return false;
-    }
-
-    return true;
-  }
-
-  bool read(Context& ctx, char* dst, size_t physicalOffset, size_t bytesToRead)
-  {
-    size_t page = physicalOffset >> ctx.page.shift;
-    size_t offsetInPage = physicalOffset & ctx.page.mask;
-    if (ctx.page.logicalSize <= offsetInPage) {
-      ctx.logger(2, "Physical offset %zu is outside page payload", physicalOffset);
-      return false;
-    }
-
-    while (bytesToRead) {
-      if (!checkPage(ctx, page)) {
-        return false;
-      }
-      size_t bytesToReadFromPage = std::min(ctx.page.logicalSize - offsetInPage, bytesToRead);
-      ctx.logger(0, "copy %zu bytes from page %zu", bytesToReadFromPage, page);
-      std::memcpy(dst, ctx.begin + page * ctx.header.pageSize + offsetInPage, bytesToReadFromPage);
-      offsetInPage = 0;
-
-      dst += bytesToReadFromPage;
-      bytesToRead -= bytesToReadFromPage;
-      page++;
     }
 
     return true;
   }
 
 }
+
+bool readE57Bytes(const E57File* e57, Logger logger, char* dst, size_t& physicalOffset, size_t bytesToRead)
+{
+  size_t page = physicalOffset >> e57->page.shift;
+  size_t offsetInPage = physicalOffset & e57->page.mask;
+  if (e57->page.logicalSize <= offsetInPage) {
+    logger(2, "Physical offset %zu is outside page payload", physicalOffset);
+    return false;
+  }
+
+  while (bytesToRead) {
+    if (!checkPage(e57, logger, page)) {
+      return false;
+    }
+    size_t bytesToReadFromPage = std::min(e57->page.logicalSize - offsetInPage, bytesToRead);
+    logger(0, "copy %zu bytes from page %zu", bytesToReadFromPage, page);
+    std::memcpy(dst, e57->bytes.data + page * e57->header.pageSize + offsetInPage, bytesToReadFromPage);
+    offsetInPage = 0;
+
+    dst += bytesToReadFromPage;
+    bytesToRead -= bytesToReadFromPage;
+    page++;
+  }
+
+  physicalOffset = page * e57->header.pageSize + offsetInPage;
+  return true;
+}
+
 
 void Component::initInteger() {
   type = Type::Integer;
@@ -182,26 +158,21 @@ void Component::initScaledInteger() {
   scaledInteger.offset = 0.0;
 }
 
-bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size)
+E57File* openE57(Logger logger, View<const char>& bytes)
 {
+  std::unique_ptr<E57File> e57 = std::make_unique<E57File>();
+  e57->bytes = bytes;
 
-  Context ctx{
-    .e57File = new E57File,
-    .logger = logger,
-    .begin = ptr,
-    .end = ptr + size,
-  };
-
-  if (!parseHeader(ctx)) {
-    return false;
+  if (!parseHeader(e57.get(), logger)) {
+    return nullptr;
   }
 
 
   Buffer<char> xml;
-  xml.accommodate(ctx.header.xmlLogicalLength);
+  xml.accommodate(e57->header.xmlLogicalLength);
 
-  if (!read(ctx, xml.data(), ctx.header.xmlPhysicalOffset, ctx.header.xmlLogicalLength)) {
-    return false;
+  if (!readE57Bytes(e57.get(), logger, xml.data(), e57->header.xmlPhysicalOffset, e57->header.xmlLogicalLength)) {
+    return nullptr;
   }
 
 #if 0
@@ -209,9 +180,9 @@ bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size)
   ctx.logger(0, "----");
 #endif
 
-  if (!parseE57Xml(ctx.e57File, logger, xml.data(), ctx.header.xmlLogicalLength)) {
-    return false;
+  if (!parseE57Xml(e57.get(), logger, xml.data(), e57->header.xmlLogicalLength)) {
+    return nullptr;
   }
 
-  return true;
+  return e57.release();
 }

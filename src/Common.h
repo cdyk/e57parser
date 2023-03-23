@@ -14,6 +14,24 @@ void* xmalloc(size_t size);
 void* xcalloc(size_t count, size_t size);
 void* xrealloc(void* ptr, size_t size);
 
+inline uint32_t readUint32LE(const char*& curr)
+{
+  const uint8_t* q = reinterpret_cast<const uint8_t*>(curr);
+  uint32_t rv = uint32_t(q[3]) << 24 | uint32_t(q[2]) << 16 | uint32_t(q[1]) << 8 | uint32_t(q[0]);
+  curr += sizeof(uint32_t);
+  return rv;
+}
+
+inline uint64_t readUint64LE(const char*& curr)
+{
+  const uint8_t* q = reinterpret_cast<const uint8_t*>(curr);
+  uint64_t rv =
+    uint64_t(q[7]) << 56 | uint64_t(q[6]) << 48 | uint64_t(q[5]) << 40 | uint64_t(q[4]) << 32 |
+    uint64_t(q[3]) << 24 | uint64_t(q[2]) << 16 | uint64_t(q[1]) << 8 | uint64_t(q[0]);
+  curr += sizeof(uint64_t);
+  return rv;
+}
+
 
 struct BufferBase
 {
@@ -129,7 +147,10 @@ template<typename T>
 struct View : public UninitializedView<T>
 {
   View() { UninitializedView<T>::init(); }
+  View(T* data_, size_t size_) { UninitializedView<T>::data = data_; UninitializedView<T>::size = size_; }
 };
 
-bool e57Parser(Logger logger, const char* path, const char* ptr, size_t size);
+E57File* openE57(Logger logger, View<const char>& bytes);
+bool readE57Bytes(const E57File* e57, Logger logger, char* dst, size_t& physicalOffset, size_t bytesToRead);
 bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t xmlLength);
+bool parseE57CompressedVector(const E57File* e57File, Logger logger, size_t pointsIndex);

@@ -68,6 +68,25 @@ struct Points
 
 struct E57File
 {
+  View<const char> bytes; // Non-owning view of raw file bytes
   View<Points> points{};
   Arena arena;
+
+  struct Header {
+    uint32_t  major = 0;
+    uint32_t  minor = 0;
+    uint64_t  filePhysicalLength = 0;
+    uint64_t  xmlPhysicalOffset = 0;
+    uint64_t  xmlLogicalLength = 0;
+    uint64_t  pageSize = 0;
+  } header;
+
+  struct Page
+  {
+    size_t size = 0;
+    size_t logicalSize = 0;
+    size_t mask = 0;
+    uint8_t shift = 0;
+  } page;
+
 };

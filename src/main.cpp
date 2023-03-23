@@ -22,6 +22,7 @@
 #include <functional>
 
 #include "Common.h"
+#include "e57File.h"
 
 namespace {
 
@@ -129,7 +130,22 @@ int main(int argc, char** argv)
     return EXIT_FAILURE;
   }
 
-  if (!processFile(argv[1], [path = argv[1]](const char* ptr, size_t size)->bool { return e57Parser(logger, path, ptr, size); })) {
+  ProcessFileFunc func = [path = argv[1]](const char* ptr, size_t size)->bool
+  {
+    View<const char> bytes(ptr, size);
+    E57File* e57 = openE57(logger, bytes);
+    if (e57 == nullptr) return false;
+
+    for (size_t i = 0; i < e57->points.size; i++) {
+      if (!parseE57CompressedVector(e57, logger, i)) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  if (!processFile(argv[1], func)) {
     logger(2, "Failed to parse '%s'", argv[1]);
     return EXIT_FAILURE;
   }
