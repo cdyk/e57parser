@@ -126,6 +126,19 @@ namespace {
     return true;
   }
 
+  bool parseNumber(int64_t& dst, const cd_xml_stringview_t* text)
+  {
+    const std::string str(text->begin, text->end);
+    try {
+      dst = std::strtoll(str.c_str(), nullptr, 10);
+      return true;
+    }
+    catch (...) {
+      return false;
+    }
+    return true;
+  }
+
   bool parseNumber(size_t& dst, const cd_xml_stringview_t* text)
   {
     const std::string str(text->begin, text->end);

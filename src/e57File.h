@@ -40,13 +40,13 @@ struct Component
   union {
 
     struct {
-      int32_t min;
-      int32_t max;
+      int64_t min;
+      int64_t max;
     } integer;
 
     struct {
-      int32_t min;
-      int32_t max;
+      int64_t min;
+      int64_t max;
       double scale;
       double offset;
     } scaledInteger;
