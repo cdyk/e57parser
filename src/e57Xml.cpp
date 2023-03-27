@@ -262,13 +262,16 @@ namespace {
   bool xmlAttributeComponent(Context& ctx, Component& component, cd_xml_doc_t* doc, cd_xml_ns_ix_t namespace_ix, cd_xml_stringview_t* name, cd_xml_stringview_t* val)
   {
     std::string_view key(name->begin, name->end);
+    std::string_view value(val->begin, val->end);
     if (key == "type") {
-      std::string_view value(val->begin, val->end);
       if (value == "ScaledInteger") {
-        component.initScaledInteger();
+        component.initInteger(Component::Type::ScaledInteger);
       }
       else if (value == "Integer") {
-        component.initInteger();
+        component.initInteger(Component::Type::Integer);
+      }
+      else if (value == "Float") {
+        component.initReal(Component::Type::Double);
       }
       else {
         ctx.logger(2, "Unexpected component type %.*s", int(value.size()), value.data());
@@ -278,8 +281,15 @@ namespace {
 
     else if (key == "minimum") {
       switch (component.type) {
-      case Component::Type::ScaledInteger:  return parseNumber(component.scaledInteger.min, val);
-      case Component::Type::Integer:        return parseNumber(component.integer.min, val);
+
+      case Component::Type::Integer:
+      case Component::Type::ScaledInteger:
+        return parseNumber(component.integer.min, val);
+
+      case Component::Type::Float:
+      case Component::Type::Double:
+        return parseNumber(component.real.min, val);
+
       default:
         ctx.logger(2, "Attribute 'minimum' not valid for component type %u", uint32_t(component.type));
         return false;
@@ -288,27 +298,55 @@ namespace {
 
     else if (key == "maximum") {
       switch (component.type) {
-      case Component::Type::ScaledInteger:  return parseNumber(component.scaledInteger.max, val);
-      case Component::Type::Integer:        return parseNumber(component.integer.max, val);
+      case Component::Type::Integer:
+      case Component::Type::ScaledInteger:
+        return parseNumber(component.integer.max, val);
+      case Component::Type::Float:
+      case Component::Type::Double:
+        return parseNumber(component.real.max, val);
       default:
         ctx.logger(2, "Attribute 'maximum' not valid for component type %u", uint32_t(component.type));
         return false;
       }
     }
 
-    else if (key == "scale") {
+    else if (key == "precision") {
       switch (component.type) {
-      case Component::Type::ScaledInteger:  return parseNumber(component.scaledInteger.scale, val);
+      case Component::Type::Float:
+      case Component::Type::Double: {
+        if (value == "singe") {
+          component.type = Component::Type::Float;
+        }
+        else if (value == "double") {
+          component.type = Component::Type::Double;
+        }
+        else {
+          ctx.logger(2, "Unrecognized 'precision' value '%.*s'", int(value.length()), value.data());
+          return false;
+        }
+        break;
+      }
       default:
+        ctx.logger(2, "Attribute 'precision' not valid for component type %u", uint32_t(component.type));
+        return false;
+      }
+    }
+
+    else if (key == "scale") {
+      if (component.type == Component::Type::ScaledInteger) {
+        return parseNumber(component.integer.scale, val);
+      }
+      else {
         ctx.logger(2, "Attribute 'scale' not valid for component type %u", uint32_t(component.type));
         return false;
       }
     }
 
     else if (key == "offset") {
-      switch (component.type) {
-      case Component::Type::ScaledInteger:  return parseNumber(component.scaledInteger.offset, val);
-      default:
+      if (component.type == Component::Type::ScaledInteger) {
+        return parseNumber(component.integer.offset, val);
+      }
+      else {
         ctx.logger(2, "Attribute 'offset' not valid for component type %u", uint32_t(component.type));
         return false;
       }
@@ -455,7 +493,13 @@ bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t x
         ctx.logger(0, "   %zu: integer min=%d max=%d", i, comp.integer.min, comp.integer.max);
         break;
       case Component::Type::ScaledInteger:
-        ctx.logger(0, "   %zu: scaled integer min=%d max=%d scale=%f offset=%f", i, comp.scaledInteger.min, comp.scaledInteger.max, comp.scaledInteger.scale, comp.scaledInteger.offset);
+        ctx.logger(0, "   %zu: scaled integer min=%d max=%d scale=%f offset=%f", i, comp.integer.min, comp.integer.max, comp.integer.scale, comp.integer.offset);
+        break;
+      case Component::Type::Float:
+        ctx.logger(0, "   %zu: float min=%f max=%f", i, comp.real.min, comp.real.max);
+        break;
+      case Component::Type::Double:
+        ctx.logger(0, "   %zu: double min=%f max=%f", i, comp.real.min, comp.real.max);
         break;
       default:
         assert(false);

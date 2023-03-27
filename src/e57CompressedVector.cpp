@@ -3,7 +3,7 @@
 
 #include <bit>
 #include <cassert>
-
+#include <cstring>
 
 namespace {
 
@@ -36,39 +36,85 @@ namespace {
     return rv;
   }
 
-  uint64_t getUint64Unaligned(const uint8_t* ptr)
+  uint64_t getUint64LEUnaligned(const uint8_t* ptr)
   {
     static_assert(std::endian::native == std::endian::little);
-    return *reinterpret_cast<const uint64_t*>(ptr);
+#ifdef _MSC_VER
+    return *reinterpret_cast<__unaligned const uint64_t*>(ptr);
+#else
+    uint64_t rv;
+    std::memcpy(&rv, ptr, sizeof(rv));
+    return rv;
+#endif
+  }
+
+  float getFloat32LEUnaligned(const uint8_t* ptr) {
+    static_assert(std::endian::native == std::endian::little);
+#ifdef _MSC_VER
+    return *reinterpret_cast<__unaligned const float*>(ptr);
+#else
+    float rv;
+    std::memcpy(&rv, ptr, sizeof(rv));
+    return rv;
+#endif
+  }
+
+  double getFloat64LEUnaligned(const uint8_t* ptr) {
+    static_assert(std::endian::native == std::endian::little);
+#ifdef _MSC_VER
+    return *reinterpret_cast<__unaligned const double*>(ptr);
+#else
+    double rv;
+    std::memcpy(&rv, ptr, sizeof(rv));
+    return rv;
+#endif
   }
 
   bool processByteStream(Context& ctx, const Component& comp, size_t offset, size_t count)
   {
-    if (comp.type != Component::Type::ScaledInteger) return true;
+    if (comp.type == Component::Type::ScaledInteger) {
 
-    int64_t diff = comp.scaledInteger.max - comp.scaledInteger.min;
-    assert(0 <= diff);
+      int64_t diff = comp.integer.max - comp.integer.min;
+      assert(0 <= diff);
 
-    int w = std::bit_width(static_cast<uint64_t>(diff));
+      int w = std::bit_width(static_cast<uint64_t>(diff));
 
-    uint64_t m = (uint64_t(1u) << w) - 1u;
-    size_t bitOffset = 0;
+      uint64_t m = (uint64_t(1u) << w) - 1u;
+      size_t bitOffset = 0;
 
-    ctx.logger(0, "component (role=0x%x) bitwidth=%d mask=0x%x", comp.role, w, m);
-    for (size_t i = 0; i < 5; i++) {
-      size_t byteOffset = bitOffset >> 3u;
-      size_t shift = bitOffset & 7u;
+      ctx.logger(0, "component (role=0x%x) bitwidth=%d mask=0x%x", comp.role, w, m);
+      for (size_t i = 0; i < 5; i++) {
+        size_t byteOffset = bitOffset >> 3u;
+        size_t shift = bitOffset & 7u;
 
-      uint64_t bits = (getUint64Unaligned(ctx.packet.data + offset + byteOffset) >> shift) & m;
-      bitOffset += w;
+        uint64_t bits = (getUint64LEUnaligned(ctx.packet.data + offset + byteOffset) >> shift) & m;
+        bitOffset += w;
 
-      int64_t value = comp.scaledInteger.min + static_cast<int64_t>(bits);
+        int64_t value = comp.integer.min + static_cast<int64_t>(bits);
 
-      ctx.logger(0, "%zu: %f", i, comp.scaledInteger.scale * static_cast<double>(value) + comp.scaledInteger.offset);
+        ctx.logger(0, "%zu: %f", i, comp.integer.scale * static_cast<double>(value) + comp.integer.offset);
+      }
 
+    }
 
+    else if (comp.type == Component::Type::Float) {
+      size_t byteOffset = 0;
+      ctx.logger(0, "component (role=0x%x) float32");
+      for (size_t i = 0; i < 5; i++) {
+        float value = getFloat32LEUnaligned(ctx.packet.data + offset + byteOffset);
+        byteOffset += 4;
+        ctx.logger(0, "%zu: %f", i, value);
+      }
+    }
 
-
+    else if (comp.type == Component::Type::Double) {
+      size_t byteOffset = 0;
+      ctx.logger(0, "component (role=0x%x) double");
+      for (size_t i = 0; i < 5; i++) {
+        double value = getFloat64LEUnaligned(ctx.packet.data + offset + byteOffset);
+        byteOffset += 8;
+        ctx.logger(0, "%zu: %f", i, value);
+      }
     }
 
 

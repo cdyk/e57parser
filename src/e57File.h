@@ -28,9 +28,11 @@ struct Component
   };
 
   enum struct Type : uint32_t {
+    None,
     Float,
-    ScaledInteger,
+    Double,
     Integer,
+    ScaledInteger,
     Count
   };
 
@@ -39,22 +41,24 @@ struct Component
 
   union {
 
-    struct {
-      int64_t min;
-      int64_t max;
-    } integer;
-
+    // Integer, scaled integer
     struct {
       int64_t min;
       int64_t max;
       double scale;
       double offset;
-    } scaledInteger;
+    } integer;
+
+    // Float, double
+    struct {
+      double min;
+      double max;
+    } real;
 
   };
 
-  void initInteger();
-  void initScaledInteger();
+  void initInteger(Type type);
+  void initReal(Type type);
 };
 
 struct Points

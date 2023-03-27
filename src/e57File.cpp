@@ -147,18 +147,18 @@ bool readE57Bytes(const E57File* e57, Logger logger, void* dst_, size_t& physica
 }
 
 
-void Component::initInteger() {
-  type = Type::Integer;
-  integer.min = std::numeric_limits<int32_t>::max();
-  integer.max = std::numeric_limits<int32_t>::min();
+void Component::initInteger(Type type_) {
+  type = type_;
+  integer.min = std::numeric_limits<int64_t>::max();
+  integer.max = std::numeric_limits<int64_t>::min();
+  integer.scale = 1.0;
+  integer.offset = 0.0;
 }
 
-void Component::initScaledInteger() {
-  type = Type::ScaledInteger;
-  scaledInteger.min = std::numeric_limits<int32_t>::max();
-  scaledInteger.max = std::numeric_limits<int32_t>::min();
-  scaledInteger.scale = 1.0;
-  scaledInteger.offset = 0.0;
+void Component::initReal(Type type_) {
+  type = type_;
+  real.min = std::numeric_limits<double>::max();
+  real.max = std::numeric_limits<double>::min();
 }
 
 E57File* openE57(Logger logger, View<const char>& bytes)
@@ -179,8 +179,8 @@ E57File* openE57(Logger logger, View<const char>& bytes)
   }
 
 #if 0
-  fwrite(xml.data(), 1, ctx.header.xmlLogicalLength, stderr);
-  ctx.logger(0, "----");
+  fwrite(xml.data(), 1, e57->header.xmlLogicalLength, stderr);
+  logger(0, "----");
 #endif
 
   if (!parseE57Xml(e57.get(), logger, xml.data(), e57->header.xmlLogicalLength)) {
