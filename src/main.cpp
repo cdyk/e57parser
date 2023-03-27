@@ -43,81 +43,111 @@ namespace {
 
   using ProcessFileFunc = std::function<bool(const char* ptr, size_t size)>;
 
-  bool processFile(const char* path, ProcessFileFunc f)
-  {
-    bool rv = false;
 #ifdef _WIN32
-
-    HANDLE h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) {
-      logger(2, "CreateFileA returned INVALID_HANDLE_VALUE");
-      rv = false;
-    }
-    else {
+  struct MemoryMappedFile
+  {
+    MemoryMappedFile(const char* path)
+    {
+      h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+      if (h == INVALID_HANDLE_VALUE) {
+        logger(2, "CreateFileA returned INVALID_HANDLE_VALUE");
+        return;
+      }
       DWORD hiSize;
       DWORD loSize = GetFileSize(h, &hiSize);
-      size_t fileSize = (size_t(hiSize) << 32u) + loSize;
+      size = (size_t(hiSize) << 32u) + loSize;
 
-      HANDLE m = CreateFileMappingA(h, 0, PAGE_READONLY, 0, 0, NULL);
+      m = CreateFileMappingA(h, 0, PAGE_READONLY, 0, 0, NULL);
       if (m == INVALID_HANDLE_VALUE) {
         logger(2, "CreateFileMappingA returned INVALID_HANDLE_VALUE");
-        rv = false;
+        return;
+
       }
-      else {
-        const char* ptr = static_cast<const char*>(MapViewOfFile(m, FILE_MAP_READ, 0, 0, 0));
-        if (ptr == nullptr) {
-          logger(2, "MapViewOfFile returned INVALID_HANDLE_VALUE");
-          rv = false;
-        }
-        else {
-          rv = f(ptr, fileSize);
-          UnmapViewOfFile(ptr);
-        }
+      ptr = static_cast<const char*>(MapViewOfFile(m, FILE_MAP_READ, 0, 0, 0));
+      if (ptr == nullptr) {
+        logger(2, "MapViewOfFile returned INVALID_HANDLE_VALUE");
+        return;
+      }
+      good = true;
+    }
+
+    ~MemoryMappedFile()
+    {
+      if (ptr != nullptr) {
+        UnmapViewOfFile(ptr);
+        ptr = nullptr;
+      }
+      if (m != INVALID_HANDLE_VALUE) {
         CloseHandle(m);
+        m = INVALID_HANDLE_VALUE;
       }
-      CloseHandle(h);
+      if (h != INVALID_HANDLE_VALUE) {
+        CloseHandle(h);
+        h = INVALID_HANDLE_VALUE;
+      }
     }
 
+    HANDLE h = INVALID_HANDLE_VALUE;
+    HANDLE m = INVALID_HANDLE_VALUE;
+    const char* ptr = nullptr;
+    size_t size = 0;
+    bool good = false;
+  };
 #else
+  struct MemoryMappedFile
+  {
+    MemoryMappedFile(const char* path, Logger logger)
+    {
+      fd = open(path, O_RDONLY);
+      if (fd == -1) {
+        logger(2, "%s: open failed: %s", path.c_str(), strerror(errno));
+        return;
+      }
 
-    int fd = open(path, O_RDONLY);
-    if (fd == -1) {
-      logger(2, "%s: open failed: %s", path.c_str(), strerror(errno));
-    }
-    else {
       struct stat stat {};
       if (fstat(fd, &stat) != 0) {
         logger(2, "%s: fstat failed: %s", path.c_str(), strerror(errno));
+        return;
       }
-      else {
+      size = stat.st_size;
 
 #ifdef __linux__
-        const char* ptr = static_cast<const char*>(mmap(nullptr, stat.st_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0));
+      const char* ptr = static_cast<const char*>(mmap(nullptr, stat.st_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0));
 #else
-        const char* ptr = static_cast<const char*>(mmap(nullptr, stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
+      const char* ptr = static_cast<const char*>(mmap(nullptr, stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
 #endif
-        if (ptr == MAP_FAILED) {
-          logger(2, "%s: mmap failed: %s", path.c_str(), strerror(errno));
+      if (ptr == MAP_FAILED) {
+        logger(2, "%s: mmap failed: %s", path.c_str(), strerror(errno));
+        return false;
+      }
+
+      if (madvise(ptr, stat.st_size, MADV_SEQUENTIAL) != 0) {
+        logger(1, "%s: madvise(MADV_SEQUENTIAL) failed: %s", path.c_str(), strerror(errno));
+        return false;
+      }
+      good = true;
+    }
+
+    ~MemoryMappedFile()
+    {
+      if (ptr != MAP_FAILED) {
+        if (munmap(ptr, size) != 0) {
+          logger(2, "munmap failed: %s", strerror(errno));
         }
-        else {
-          if (madvise(ptr, stat.st_size, MADV_SEQUENTIAL) != 0) {
-            logger(1, "%s: madvise(MADV_SEQUENTIAL) failed: %s", path.c_str(), strerror(errno));
-          }
-          rv = f(ptr, stat.st_size);
-          if (munmap(ptr, stat.st_size) != 0) {
-            logger(2, "%s: munmap failed: %s", path.c_str(), strerror(errno));
-            rv = false;
-          }
-        }
+        ptr = MAP_FAILED;
+      }
+      if (fd != -1) {
+        close(fd);
+        fd = -1;
       }
     }
 
+    const char* ptr = MAP_FAILED;
+    size_t size = 0;
+    int fd = -1;
+    bool good = false;
+  };
 #endif
-    return rv;
-  }
-
-
-
 
 }
 
@@ -130,25 +160,31 @@ int main(int argc, char** argv)
     return EXIT_FAILURE;
   }
 
-  ProcessFileFunc func = [path = argv[1]](const char* ptr, size_t size)->bool
+  bool success = true;
   {
-    View<const char> bytes(ptr, size);
-    E57File* e57 = openE57(logger, bytes);
-    if (e57 == nullptr) return false;
+    MemoryMappedFile mappedFile(argv[1]);
 
-    for (size_t i = 0; i < e57->points.size; i++) {
-      if (!parseE57CompressedVector(e57, logger, i)) {
-        return false;
+    View<const char> bytes(mappedFile.ptr, mappedFile.size);
+    E57File* e57 = openE57(logger, bytes);
+    if (e57) {
+      success = false;
+    }
+    else {
+      for (size_t i = 0; i < e57->points.size; i++) {
+        if (!parseE57CompressedVector(e57, logger, i)) {
+          success = false;
+          break;
+        }
       }
     }
+  }
 
-    return true;
-  };
-
-  if (!processFile(argv[1], func)) {
-    logger(2, "Failed to parse '%s'", argv[1]);
+  if (success) {
+    logger(0, "Parsed '%s' successfully", argv[1]);
+    return EXIT_SUCCESS;
+  }
+  else {
+    logger(2, "Failed to parse %s", argv[1]);
     return EXIT_FAILURE;
   }
-  logger(0, "Parsed '%s' successfully", argv[1]);
-  return EXIT_SUCCESS;
 }
