@@ -155,8 +155,3 @@ struct View : public UninitializedView<T>
   View() { UninitializedView<T>::init(); }
   View(T* data_, size_t size_) { UninitializedView<T>::data = data_; UninitializedView<T>::size = size_; }
 };
-
-E57File* openE57(Logger logger, View<const char>& bytes);
-bool readE57Bytes(const E57File* e57, Logger logger, void* dst, size_t& physicalOffset, size_t bytesToRead);
-bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t xmlLength);
-bool parseE57CompressedVector(const E57File* e57File, Logger logger, size_t pointsIndex);

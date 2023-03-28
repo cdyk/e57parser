@@ -34,13 +34,31 @@ namespace {
     return rv;
   }
 
+  View<const char> e57Read(const E57File* e57, Logger logger, uint64_t offset, uint64_t size)
+  {
+    View<const char> rv = e57->fileRead(e57->fileReadData, offset, size);
+    if (rv.size != size) {
+      logger(2, "File read error, offset=%" PRIu64 ", size=%" PRIu64, offset, size);
+      rv.data = nullptr;
+      rv.size = 0;
+    }
+    return rv;
+  }
+
   bool parseHeader(E57File* e57, Logger logger)
   {
-    const char* curr = e57->bytes.data;
-    if (e57->bytes.size < 8 + 2 * 4 + 4 * 8) {
+    const size_t headerSize = 8 + 2 * 4 + 4 * 8;
+    if (e57->fileSize < headerSize) {
       logger(2, "File smaller than e57 file header");
       return false;
     }
+
+    View<const char> bytes = e57Read(e57, logger, 0, headerSize);
+    if (!bytes.size) {
+      return false;
+    }
+
+    const char* curr = bytes.data;
 
     if (std::memcmp("ASTM-E57", curr, 8) != 0) {
       logger(2, "Wrong file signature");
@@ -77,7 +95,7 @@ namespace {
     return true;
   }
 
-  bool checkPage(const E57File* e57, Logger logger, size_t page)
+  bool checkPage(const E57File* e57, Logger logger, const View<const char>& bytes)
   {
     static bool first = true;
     static uint32_t table[256];
@@ -98,7 +116,7 @@ namespace {
     }
 
     uint32_t crc = 0xFFFFFFFFu;
-    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(e57->bytes.data) + page * e57->page.size;
+    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(bytes.data);
     for (size_t i = 0; i < e57->page.logicalSize; i++) {
       crc = (crc >> 8) ^ table[(crc ^ *ptr++) & 0xff];
     }
@@ -127,14 +145,16 @@ bool readE57Bytes(const E57File* e57, Logger logger, void* dst_, size_t& physica
 
   char* dst = static_cast<char*>(dst_);
   while (bytesToRead) {
-    if (!checkPage(e57, logger, page)) {
+
+    View<const char> pageBytes = e57Read(e57, logger, page * e57->page.size, e57->page.size);
+    if (!checkPage(e57, logger, pageBytes)) {
       return false;
     }
     size_t bytesToReadFromPage = std::min(e57->page.logicalSize - offsetInPage, bytesToRead);
 #if 0
     logger(0, "copy %zu bytes from page %zu", bytesToReadFromPage, page);
 #endif
-    std::memcpy(dst, e57->bytes.data + page * e57->header.pageSize + offsetInPage, bytesToReadFromPage);
+    std::memcpy(dst, pageBytes.data + offsetInPage, bytesToReadFromPage);
     physicalOffset = page * e57->header.pageSize + offsetInPage + bytesToReadFromPage;
     offsetInPage = 0;
 
@@ -161,10 +181,12 @@ void Component::initReal(Type type_) {
   real.max = std::numeric_limits<double>::min();
 }
 
-E57File* openE57(Logger logger, View<const char>& bytes)
+E57File* openE57(Logger logger, ReadCallback fileRead, void* fileReadData, uint64_t fileSize)
 {
   std::unique_ptr<E57File> e57 = std::make_unique<E57File>();
-  e57->bytes = bytes;
+  e57->fileRead = fileRead;
+  e57->fileReadData = fileReadData;
+  e57->fileSize = fileSize;
 
   if (!parseHeader(e57.get(), logger)) {
     return nullptr;

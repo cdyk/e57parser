@@ -1,6 +1,12 @@
 #pragma once
 #include "Common.h"
 
+// Readback callback. 
+//
+// Returns a view of the file. The returned view will ony be accessed before the next
+// invocation of the callback, that is, the callback can reuse an internal buffer.
+typedef View<const char>(*ReadCallback)(void* callbackData, uint64_t offset, uint64_t size);
+
 struct Component
 {
   enum struct Role : uint32_t {
@@ -72,7 +78,10 @@ struct Points
 
 struct E57File
 {
-  View<const char> bytes; // Non-owning view of raw file bytes
+  ReadCallback fileRead = nullptr;
+  void* fileReadData = nullptr;
+  uint64_t fileSize = 0;
+
   View<Points> points{};
   Arena arena;
 
@@ -94,3 +103,10 @@ struct E57File
   } page;
 
 };
+
+
+E57File* openE57(Logger logger, ReadCallback fileRead, void* fileReadData, uint64_t fileSize);
+
+bool readE57Bytes(const E57File* e57, Logger logger, void* dst, size_t& physicalOffset, size_t bytesToRead);
+bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t xmlLength);
+bool parseE57CompressedVector(const E57File* e57File, Logger logger, size_t pointsIndex);

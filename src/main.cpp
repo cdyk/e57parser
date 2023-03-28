@@ -149,7 +149,21 @@ namespace {
   };
 #endif
 
+
+
+  View<const char> memoryMappedFileCallback(void* callbackData, uint64_t offset, uint64_t size)
+  {
+    const MemoryMappedFile* mappedFile = static_cast<const MemoryMappedFile*>(callbackData);
+    if (!mappedFile->good || mappedFile->size < offset || mappedFile->size < offset + size) {
+      return View<const char>(nullptr, 0);
+    }
+    return View<const char>(mappedFile->ptr + static_cast<size_t>(offset), size);
+  }
+
+
+
 }
+
 
 
 
@@ -164,8 +178,7 @@ int main(int argc, char** argv)
   {
     MemoryMappedFile mappedFile(argv[1]);
 
-    View<const char> bytes(mappedFile.ptr, mappedFile.size);
-    E57File* e57 = openE57(logger, bytes);
+    E57File* e57 = openE57(logger, memoryMappedFileCallback, &mappedFile, mappedFile.size);
     if (e57) {
       success = false;
     }
