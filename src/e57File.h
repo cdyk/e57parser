@@ -70,8 +70,8 @@ struct Component
 
 struct Points
 {
-  size_t fileOffset;
-  size_t recordCount;
+  uint64_t fileOffset;
+  uint64_t recordCount;
   UninitializedView<Component> components;
 
   void init() { fileOffset = 0; recordCount = 0; components.init(); }
@@ -112,6 +112,6 @@ struct E57File
 
 bool openE57(E57File& e57, Logger logger, ReadCallback fileRead, void* fileReadData, uint64_t fileSize);
 
-bool readE57Bytes(const E57File* e57, Logger logger, void* dst, size_t& physicalOffset, size_t bytesToRead);
+bool readE57Bytes(const E57File* e57, Logger logger, void* dst, uint64_t& physicalOffset, uint64_t bytesToRead);
 bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t xmlLength);
 bool parseE57CompressedVector(const E57File* e57File, Logger logger, size_t pointsIndex);

@@ -70,18 +70,18 @@ namespace {
 #endif
   }
 
-  bool processByteStream(Context& ctx, const Component& comp, size_t offset, size_t count)
+  bool processByteStream(Context& ctx, const Component& comp, uint64_t offset, uint64_t count)
   {
     if (comp.type == Component::Type::ScaledInteger) {
 
       uint64_t w = comp.integer.bitWidth;
       uint64_t m = (uint64_t(1u) << w) - 1u;
-      size_t bitOffset = 0;
+      uint64_t bitOffset = 0;
 
       ctx.logger(0, "component (role=0x%x) bitwidth=%d mask=0x%x", comp.role, w, m);
       for (size_t i = 0; i < 5; i++) {
-        size_t byteOffset = bitOffset >> 3u;
-        size_t shift = bitOffset & 7u;
+        uint64_t byteOffset = bitOffset >> 3u;
+        uint64_t shift = bitOffset & 7u;
 
         uint64_t bits = (getUint64LEUnaligned(ctx.packet.data + offset + byteOffset) >> shift) & m;
         bitOffset += w;
@@ -94,7 +94,7 @@ namespace {
     }
 
     else if (comp.type == Component::Type::Float) {
-      size_t byteOffset = 0;
+      uint64_t byteOffset = 0;
       ctx.logger(0, "component (role=0x%x) float32");
       for (size_t i = 0; i < 5; i++) {
         float value = getFloat32LEUnaligned(ctx.packet.data + offset + byteOffset);
@@ -104,7 +104,7 @@ namespace {
     }
 
     else if (comp.type == Component::Type::Double) {
-      size_t byteOffset = 0;
+      uint64_t byteOffset = 0;
       ctx.logger(0, "component (role=0x%x) double");
       for (size_t i = 0; i < 5; i++) {
         double value = getFloat64LEUnaligned(ctx.packet.data + offset + byteOffset);
@@ -117,7 +117,7 @@ namespace {
     return true;
   }
 
-  bool readPacket(Context& ctx, size_t& fileOffset)
+  bool readPacket(Context& ctx, uint64_t& fileOffset)
   {
     // Read 4-byte sized packet header
     if (!readE57Bytes(ctx.e57, ctx.logger, ctx.packet.data, fileOffset, 4)) {
@@ -215,7 +215,19 @@ namespace {
     return true;
   }
 
+  uint64_t calculateSectionLogicalEnd(Context& ctx, uint64_t fileOffset, uint64_t sectionLogicalLength)
+  {
+    uint64_t sectionLogicalOffset = ((fileOffset >> ctx.e57->page.shift) * ctx.e57->page.logicalSize +
+                                     (fileOffset & ctx.e57->page.mask));
+    return sectionLogicalOffset + sectionLogicalLength;
+  }
 
+  uint64_t calculateSectionPhysicalEnd(Context& ctx, const uint64_t fileOffset, const uint64_t sectionLogicalLength)
+  {
+    uint64_t sectionLogicalEnd = calculateSectionLogicalEnd(ctx, fileOffset, sectionLogicalLength);
+    return ((sectionLogicalEnd / ctx.e57->page.logicalSize) * ctx.e57->page.size +
+            (sectionLogicalEnd % ctx.e57->page.logicalSize));
+  }
 
 }
 
@@ -234,9 +246,9 @@ bool parseE57CompressedVector(const E57File* e57, Logger logger, size_t pointsIn
          points.fileOffset, points.recordCount);
 
   constexpr uint8_t CompressedVectorSectionId = 1;
-  constexpr size_t CompressedVectorSectionHeaderSize = 8 + 3 * 8;
+  constexpr uint64_t CompressedVectorSectionHeaderSize = 8 + 3 * 8;
 
-  size_t fileOffset = points.fileOffset;
+  uint64_t fileOffset = points.fileOffset;
 
 
   Buffer<char> buf;
@@ -254,25 +266,16 @@ bool parseE57CompressedVector(const E57File* e57, Logger logger, size_t pointsIn
   ptr += 8;
 
   // Bytelength of whole section
-  size_t sectionLogicalLength = readUint64LE(ptr); 
+  uint64_t sectionLogicalLength = readUint64LE(ptr); 
 
   // Calculate section end 
-  size_t sectionPhysicalEnd = 0;
-  {
-    size_t sectionLogicalOffset = ((points.fileOffset >> e57->page.shift) * e57->page.logicalSize +
-                                   (points.fileOffset & e57->page.mask));
-
-    size_t sectionLogicalEnd = sectionLogicalOffset + sectionLogicalLength;
-
-    sectionPhysicalEnd = ((sectionLogicalEnd / e57->page.logicalSize) * e57->page.size +
-                          (sectionLogicalEnd % e57->page.logicalSize));
-  }
+  uint64_t sectionPhysicalEnd = calculateSectionPhysicalEnd(ctx, points.fileOffset, sectionLogicalLength);
 
   // Offset of first datapacket
-  size_t dataPhysicalOffset = readUint64LE(ptr);
+  uint64_t dataPhysicalOffset = readUint64LE(ptr);
 
   // Offset of first index packet
-  size_t indexPhysicalOffset = readUint64LE(ptr);
+  uint64_t indexPhysicalOffset = readUint64LE(ptr);
 
   logger(0, "sectionLogicalLength=0x%zx dataPhysicalOffset=0x%zx indexPhysicalOffset=%zx sectionPhysicalEnd=0x%zx",
          sectionLogicalLength, dataPhysicalOffset, indexPhysicalOffset, sectionPhysicalEnd);

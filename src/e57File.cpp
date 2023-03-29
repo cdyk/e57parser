@@ -133,7 +133,7 @@ namespace {
 
 }
 
-bool readE57Bytes(const E57File* e57, Logger logger, void* dst_, size_t& physicalOffset, size_t bytesToRead)
+bool readE57Bytes(const E57File* e57, Logger logger, void* dst_, uint64_t& physicalOffset, uint64_t bytesToRead)
 {
   size_t page = physicalOffset >> e57->page.shift;
   size_t offsetInPage = physicalOffset & e57->page.mask;
