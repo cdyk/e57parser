@@ -74,11 +74,7 @@ namespace {
   {
     if (comp.type == Component::Type::ScaledInteger) {
 
-      int64_t diff = comp.integer.max - comp.integer.min;
-      assert(0 <= diff);
-
-      int w = std::bit_width(static_cast<uint64_t>(diff));
-
+      uint64_t w = comp.integer.bitWidth;
       uint64_t m = (uint64_t(1u) << w) - 1u;
       size_t bitOffset = 0;
 

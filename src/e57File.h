@@ -53,6 +53,7 @@ struct Component
       int64_t max;
       double scale;
       double offset;
+      uint8_t bitWidth;
     } integer;
 
     // Float, double

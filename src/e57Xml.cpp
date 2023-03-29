@@ -479,6 +479,34 @@ bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t x
 
       Component& dstComp = dstPoints.components[compIx++];
       dstComp = srcComp->component;
+
+      switch (dstComp.type) {
+
+      case Component::Type::Float:
+      case Component::Type::Double:
+        if (dstComp.real.max < dstComp.real.min) {
+          ctx.logger(2, "Float/double component min is larger than max");
+          return false;
+        }
+        break;
+
+      case Component::Type::Integer:
+      case Component::Type::ScaledInteger: {
+        if (dstComp.integer.max < dstComp.integer.min) {
+          ctx.logger(2, "Integer/scaled integer component min is larger than max");
+          return false;
+        }
+        int64_t diff = dstComp.integer.max - dstComp.integer.min;
+        dstComp.integer.bitWidth = std::bit_width(static_cast<uint64_t>(diff));
+        break;
+      }
+      default:
+        ctx.logger(2, "Illegal component type");
+        return false;
+      }
+
+
+
     }
   }
 
