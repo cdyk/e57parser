@@ -178,13 +178,13 @@ int main(int argc, char** argv)
   {
     MemoryMappedFile mappedFile(argv[1]);
 
-    E57File* e57 = openE57(logger, memoryMappedFileCallback, &mappedFile, mappedFile.size);
-    if (e57) {
+    E57File e57;
+    if(!openE57(e57, logger, memoryMappedFileCallback, &mappedFile, mappedFile.size)) {
       success = false;
     }
     else {
-      for (size_t i = 0; i < e57->points.size; i++) {
-        if (!parseE57CompressedVector(e57, logger, i)) {
+      for (size_t i = 0; i < e57.points.size; i++) {
+        if (!parseE57CompressedVector(&e57, logger, i)) {
           success = false;
           break;
         }

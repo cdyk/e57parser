@@ -85,6 +85,8 @@ struct E57File
   View<Points> points{};
   Arena arena;
 
+  bool ready = false;
+
   struct Header {
     uint32_t  major = 0;
     uint32_t  minor = 0;
@@ -105,7 +107,9 @@ struct E57File
 };
 
 
-E57File* openE57(Logger logger, ReadCallback fileRead, void* fileReadData, uint64_t fileSize);
+
+
+bool openE57(E57File& e57, Logger logger, ReadCallback fileRead, void* fileReadData, uint64_t fileSize);
 
 bool readE57Bytes(const E57File* e57, Logger logger, void* dst, size_t& physicalOffset, size_t bytesToRead);
 bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t xmlLength);

@@ -7,7 +7,6 @@
 #include <cinttypes>
 #include <algorithm>
 #include <cassert>
-#include <memory>
 
 #include "Common.h"
 #include "e57File.h"
@@ -181,33 +180,38 @@ void Component::initReal(Type type_) {
   real.max = std::numeric_limits<double>::min();
 }
 
-E57File* openE57(Logger logger, ReadCallback fileRead, void* fileReadData, uint64_t fileSize)
+bool openE57(E57File& e57, Logger logger, ReadCallback fileRead, void* fileReadData, uint64_t fileSize)
 {
-  std::unique_ptr<E57File> e57 = std::make_unique<E57File>();
-  e57->fileRead = fileRead;
-  e57->fileReadData = fileReadData;
-  e57->fileSize = fileSize;
+  if (e57.ready) {
+    logger(2, "E57 file object already open");
+    return false;
+  }
 
-  if (!parseHeader(e57.get(), logger)) {
-    return nullptr;
+  e57.fileRead = fileRead;
+  e57.fileReadData = fileReadData;
+  e57.fileSize = fileSize;
+
+  if (!parseHeader(&e57, logger)) {
+    return false;
   }
 
 
   Buffer<char> xml;
-  xml.accommodate(e57->header.xmlLogicalLength);
+  xml.accommodate(e57.header.xmlLogicalLength);
 
-  if (!readE57Bytes(e57.get(), logger, xml.data(), e57->header.xmlPhysicalOffset, e57->header.xmlLogicalLength)) {
-    return nullptr;
+  if (!readE57Bytes(&e57, logger, xml.data(), e57.header.xmlPhysicalOffset, e57.header.xmlLogicalLength)) {
+    return false;
   }
 
-#if 0
-  fwrite(xml.data(), 1, e57->header.xmlLogicalLength, stderr);
+#if 1
+  fwrite(xml.data(), 1, e57.header.xmlLogicalLength, stderr);
   logger(0, "----");
 #endif
 
-  if (!parseE57Xml(e57.get(), logger, xml.data(), e57->header.xmlLogicalLength)) {
-    return nullptr;
+  if (!parseE57Xml(&e57, logger, xml.data(), e57.header.xmlLogicalLength)) {
+    return false;
   }
 
-  return e57.release();
+  e57.ready = true;
+  return true;
 }
