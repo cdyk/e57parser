@@ -70,50 +70,82 @@ namespace {
 #endif
   }
 
-  bool processByteStream(Context& ctx, const Component& comp, uint64_t offset, uint64_t count)
+  
+  constexpr uint32_t AllBitsRead = ~uint32_t(0);
+
+  uint32_t consumeBits(Context& ctx, const Component& comp, size_t maxItems, uint32_t byteStreamOffset, uint32_t bitsConsumed, uint32_t bitsAvailable)
   {
     if (comp.type == Component::Type::ScaledInteger) {
 
-      uint64_t w = comp.integer.bitWidth;
-      uint64_t m = (uint64_t(1u) << w) - 1u;
-      uint64_t bitOffset = 0;
+      const uint8_t w = comp.integer.bitWidth;
+      const uint64_t m = (uint64_t(1u) << w) - 1u;
 
       ctx.logger(0, "component (role=0x%x) bitwidth=%d mask=0x%x", comp.role, w, m);
-      for (size_t i = 0; i < 5; i++) {
-        uint64_t byteOffset = bitOffset >> 3u;
-        uint64_t shift = bitOffset & 7u;
 
-        uint64_t bits = (getUint64LEUnaligned(ctx.packet.data + offset + byteOffset) >> shift) & m;
-        bitOffset += w;
+      uint32_t bitsConsumedNext = bitsConsumed + w;
+      for (size_t i = 0; i < maxItems; i++) {
+
+        if (bitsAvailable < bitsConsumedNext) {
+          return AllBitsRead;
+        }
+
+        uint64_t byteOffset = bitsConsumed >> 3u;
+        uint64_t shift = bitsConsumed & 7u;
+        uint64_t bits = (getUint64LEUnaligned(ctx.packet.data + byteStreamOffset + byteOffset) >> shift) & m;
+
+        bitsConsumed = bitsConsumedNext;
+        bitsConsumedNext += w;
 
         int64_t value = comp.integer.min + static_cast<int64_t>(bits);
-
         ctx.logger(0, "%zu: %f", i, comp.integer.scale * static_cast<double>(value) + comp.integer.offset);
       }
-
     }
-
     else if (comp.type == Component::Type::Float) {
-      uint64_t byteOffset = 0;
-      ctx.logger(0, "component (role=0x%x) float32");
-      for (size_t i = 0; i < 5; i++) {
-        float value = getFloat32LEUnaligned(ctx.packet.data + offset + byteOffset);
-        byteOffset += 4;
+
+      constexpr uint32_t w = 8 * 4;
+      uint32_t bitsConsumedNext = bitsConsumed + w;
+      for (size_t i = 0; i < maxItems; i++) {
+
+        if (bitsAvailable < bitsConsumedNext) {
+          return AllBitsRead;
+        }
+
+        uint64_t byteOffset = bitsConsumed >> 3u;
+        float value = getFloat32LEUnaligned(ctx.packet.data + byteStreamOffset + byteOffset);
+
+        bitsConsumed = bitsConsumedNext;
+        bitsConsumedNext += w;
+
         ctx.logger(0, "%zu: %f", i, value);
       }
     }
-
     else if (comp.type == Component::Type::Double) {
-      uint64_t byteOffset = 0;
-      ctx.logger(0, "component (role=0x%x) double");
-      for (size_t i = 0; i < 5; i++) {
-        double value = getFloat64LEUnaligned(ctx.packet.data + offset + byteOffset);
-        byteOffset += 8;
+
+      constexpr uint32_t w = 8 * 8;
+      uint32_t bitsConsumedNext = bitsConsumed + w;
+      for (size_t i = 0; i < maxItems; i++) {
+
+        if (bitsAvailable < bitsConsumedNext) {
+          return AllBitsRead;
+        }
+
+        uint64_t byteOffset = bitsConsumed >> 3u;
+        double value = getFloat64LEUnaligned(ctx.packet.data + byteStreamOffset + byteOffset);
+
+        bitsConsumed = bitsConsumedNext;
+        bitsConsumedNext += w;
+
         ctx.logger(0, "%zu: %f", i, value);
       }
     }
 
+    return bitsConsumed;
+  }
 
+  bool processByteStream(Context& ctx, const Component& comp, uint64_t offset, uint64_t count)
+  {
+    uint32_t t = consumeBits(ctx, comp, 2, offset, 0, 8 * count);
+    consumeBits(ctx, comp, 3, offset, t, 8 * count);
     return true;
   }
 
@@ -190,9 +222,8 @@ namespace {
           return false;
         }
 
-        if (!processByteStream(ctx, ctx.pts.components[i], byteStreamOffset, byteStreamsByteCount)) {
-          return false;
-        }
+        uint32_t t = consumeBits(ctx, ctx.pts.components[i], 2, byteStreamOffset, 0, 8 * byteStreamsByteCount);
+        consumeBits(ctx, ctx.pts.components[i], 3, byteStreamOffset, t, 8 * byteStreamsByteCount);
 
         byteStreamOffset = byteStreamEnd;
       }
