@@ -73,8 +73,28 @@ namespace {
   
   constexpr uint32_t AllBitsRead = ~uint32_t(0);
 
-  uint32_t consumeBits(Context& ctx, const Component& comp, size_t maxItems, uint32_t byteStreamOffset, uint32_t bitsConsumed, uint32_t bitsAvailable)
+  struct BitUnpackState
   {
+    size_t itemsWritten = 0;
+    uint32_t bitsConsumed = 0;
+  };
+
+  struct BitUnpackDesc
+  {
+    size_t maxItems = 0;
+    uint32_t byteStreamOffset = 0;
+    uint32_t bitsAvailable = 0;
+  };
+
+  void consumeBits(const Context& ctx, BitUnpackState& unpackState, const BitUnpackDesc& unpackDesc, const Component& comp)
+  {
+    const size_t maxItems = unpackDesc.maxItems;
+    const size_t byteStreamOffset = unpackDesc.byteStreamOffset;
+    const uint32_t bitsAvailable = unpackDesc.bitsAvailable;
+
+    uint32_t bitsConsumed = unpackState.bitsConsumed;
+    size_t item = unpackState.itemsWritten;
+
     if (comp.type == Component::Type::ScaledInteger) {
 
       const uint8_t w = comp.integer.bitWidth;
@@ -83,10 +103,12 @@ namespace {
       ctx.logger(0, "component (role=0x%x) bitwidth=%d mask=0x%x", comp.role, w, m);
 
       uint32_t bitsConsumedNext = bitsConsumed + w;
-      for (size_t i = 0; i < maxItems; i++) {
+
+      for (; item < maxItems; item++) {
 
         if (bitsAvailable < bitsConsumedNext) {
-          return AllBitsRead;
+          bitsConsumed = AllBitsRead;
+          break;
         }
 
         uint64_t byteOffset = bitsConsumed >> 3u;
@@ -97,17 +119,19 @@ namespace {
         bitsConsumedNext += w;
 
         int64_t value = comp.integer.min + static_cast<int64_t>(bits);
-        ctx.logger(0, "%zu: %f", i, comp.integer.scale * static_cast<double>(value) + comp.integer.offset);
+        ctx.logger(0, "%zu: %f", item, comp.integer.scale * static_cast<double>(value) + comp.integer.offset);
       }
     }
     else if (comp.type == Component::Type::Float) {
 
       constexpr uint32_t w = 8 * 4;
       uint32_t bitsConsumedNext = bitsConsumed + w;
-      for (size_t i = 0; i < maxItems; i++) {
+
+      for (; item < maxItems; item++) {
 
         if (bitsAvailable < bitsConsumedNext) {
-          return AllBitsRead;
+          bitsConsumed = AllBitsRead;
+          break;
         }
 
         uint64_t byteOffset = bitsConsumed >> 3u;
@@ -116,17 +140,19 @@ namespace {
         bitsConsumed = bitsConsumedNext;
         bitsConsumedNext += w;
 
-        ctx.logger(0, "%zu: %f", i, value);
+        ctx.logger(0, "%zu: %f", item, value);
       }
     }
     else if (comp.type == Component::Type::Double) {
 
       constexpr uint32_t w = 8 * 8;
       uint32_t bitsConsumedNext = bitsConsumed + w;
-      for (size_t i = 0; i < maxItems; i++) {
+
+      for (; item < maxItems; item++) {
 
         if (bitsAvailable < bitsConsumedNext) {
-          return AllBitsRead;
+          bitsConsumed = AllBitsRead;
+          break;
         }
 
         uint64_t byteOffset = bitsConsumed >> 3u;
@@ -135,18 +161,11 @@ namespace {
         bitsConsumed = bitsConsumedNext;
         bitsConsumedNext += w;
 
-        ctx.logger(0, "%zu: %f", i, value);
+        ctx.logger(0, "%zu: %f", item, value);
       }
     }
 
-    return bitsConsumed;
-  }
-
-  bool processByteStream(Context& ctx, const Component& comp, uint64_t offset, uint64_t count)
-  {
-    uint32_t t = consumeBits(ctx, comp, 2, offset, 0, 8 * count);
-    consumeBits(ctx, comp, 3, offset, t, 8 * count);
-    return true;
+    unpackState = { item,  bitsConsumed };
   }
 
   bool readPacket(Context& ctx, uint64_t& fileOffset)
@@ -222,8 +241,18 @@ namespace {
           return false;
         }
 
-        uint32_t t = consumeBits(ctx, ctx.pts.components[i], 2, byteStreamOffset, 0, 8 * byteStreamsByteCount);
-        consumeBits(ctx, ctx.pts.components[i], 3, byteStreamOffset, t, 8 * byteStreamsByteCount);
+        BitUnpackState unpackState{};
+
+        BitUnpackDesc unpackDesc{
+          .maxItems = 2,
+          .byteStreamOffset = static_cast<uint32_t>(byteStreamOffset),
+          .bitsAvailable = 8 * static_cast<uint32_t>(byteStreamsByteCount)
+        };
+
+        consumeBits(ctx, unpackState, unpackDesc,  ctx.pts.components[i]);
+
+        unpackDesc.maxItems = 5;
+        consumeBits(ctx, unpackState, unpackDesc, ctx.pts.components[i]);
 
         byteStreamOffset = byteStreamEnd;
       }
