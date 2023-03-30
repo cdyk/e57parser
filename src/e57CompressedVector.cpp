@@ -20,11 +20,20 @@ namespace {
     const Points& pts;
 
     struct {
+      uint64_t currentOffset = 0u; // Current packet offset
+      uint64_t nextOffset = 0u;    // Next packet
       uint8_t data[0x10000 + 8]; // packet length is 16 bits. Include extra 8 bytes so it is safe to do a 64-bit unaligned fetch at end.
       size_t size = 0;
       PacketType type = PacketType::Empty;
       const uint8_t operator[](size_t ix) const{ return data[ix]; }
     } packet;
+
+    // Decoded data-packet fields
+    struct {
+      uint16_t byteStreamsCount = 0; // Cannot be more than 0xFFFF streams
+      uint16_t pad;
+      uint32_t byteStreamOffsets[0x10000]; // Packet length is 16 bytes, and some are counts etc, so offsets cannot be more than 16 bits.
+    } dataPacket;
 
   };
 
@@ -86,7 +95,7 @@ namespace {
     uint32_t bitsAvailable = 0;
   };
 
-  void consumeBits(const Context& ctx, BitUnpackState& unpackState, const BitUnpackDesc& unpackDesc, const Component& comp)
+  bool consumeBits(const Context& ctx, BitUnpackState& unpackState, const BitUnpackDesc& unpackDesc, const Component& comp)
   {
     const size_t maxItems = unpackDesc.maxItems;
     const size_t byteStreamOffset = unpackDesc.byteStreamOffset;
@@ -165,43 +174,30 @@ namespace {
       }
     }
 
+    bool anyOutput = item != unpackState.itemsWritten;
     unpackState = { item,  bitsConsumed };
+    return anyOutput;
   }
 
-  bool readPacket(Context& ctx, uint64_t& fileOffset)
+  bool checkCurrentPacket(Context& ctx)
   {
-    // Read 4-byte sized packet header
-    if (!readE57Bytes(ctx.e57, ctx.logger, ctx.packet.data, fileOffset, 4)) {
-      return false;
-    }
-    ctx.packet.type = static_cast<PacketType>(ctx.packet[0]);
-    ctx.packet.size = size_t(ctx.packet[2]) + (size_t(ctx.packet[3]) << 8) + 1;
-    if (ctx.packet.size < 4) {
-      ctx.logger(2, "Packet size %zu is less than header size (=4)", ctx.packet.size);
-      return false;
-    }
-
-    // Read rest of packet
-    if (!readE57Bytes(ctx.e57, ctx.logger, ctx.packet.data + 4, fileOffset, ctx.packet.size - 4)) {
-      return false;
-    }
-
     switch (ctx.packet.type)
     {
+
     case PacketType::Index: {
       uint8_t flags = ctx.packet[1];
       size_t entryCount = getUint16LE(ctx.packet.data + 4);
       uint8_t indexLevel = ctx.packet[6];
       // Payload starts at 16, entryCount of struct { uint64_t chunkRecordNumber, chunkPhysicalOffset = 0 }
-
       ctx.logger(0, "Index packet: size=%zu flags=%u entryCount=%zu indexLevel=%u", ctx.packet.size, flags, entryCount, indexLevel);
       break;
     }
+
     case PacketType::Data: {
       uint8_t flags = ctx.packet[1];
       size_t bytestreamCount = getUint16LE(ctx.packet.data + 4);
-      // Payload starts at 6
 
+      // Payload starts at 6
       if ((ctx.packet.size % 4) != 0) {
         ctx.logger(2, "Packet size=%zu is not a multiple of 4", ctx.packet.size);
         return false;
@@ -270,6 +266,83 @@ namespace {
       return false;
     }
 
+    return true;
+  }
+
+  bool readPacket(Context& ctx, uint64_t& fileOffset)
+  {
+    // Read 4-byte sized packet header
+    if (!readE57Bytes(ctx.e57, ctx.logger, ctx.packet.data, fileOffset, 4)) {
+      return false;
+    }
+    ctx.packet.type = static_cast<PacketType>(ctx.packet[0]);
+    ctx.packet.size = size_t(ctx.packet[2]) + (size_t(ctx.packet[3]) << 8) + 1;
+    if (ctx.packet.size < 4) {
+      ctx.logger(2, "Packet size %zu is less than header size (=4)", ctx.packet.size);
+      return false;
+    }
+
+    // Read rest of packet
+    if (!readE57Bytes(ctx.e57, ctx.logger, ctx.packet.data + 4, fileOffset, ctx.packet.size - 4)) {
+      return false;
+    }
+
+    return checkCurrentPacket(ctx);
+  }
+
+  uint64_t getPacket(Context& ctx, uint64_t packetOffset, PacketType expectedPacketType)
+  {
+    // Check if we already have read this packet.
+    if(ctx.packet.currentOffset == packetOffset) {
+      return ctx.packet.nextOffset;
+    }
+
+    // Read packet
+    ctx.packet.currentOffset = packetOffset;
+
+    // Read 4 - byte sized packet header
+    if (!readE57Bytes(ctx.e57, ctx.logger, ctx.packet.data, packetOffset, 4)) {
+      return ctx.packet.nextOffset = ctx.packet.currentOffset = 0;
+    }
+    ctx.packet.type = static_cast<PacketType>(ctx.packet[0]);
+    ctx.packet.size = size_t(ctx.packet[2]) + (size_t(ctx.packet[3]) << 8) + 1;
+    if (ctx.packet.size < 4) {
+      ctx.logger(2, "Packet size %zu is less than header size (=4)", ctx.packet.size);
+      return ctx.packet.nextOffset = ctx.packet.currentOffset = 0;
+    }
+
+    // Check if packet is the expected type
+    if (ctx.packet.type != expectedPacketType) {
+      ctx.logger(2, "Unexpected packet type, expected 0x%x but got 0x%x", uint32_t(expectedPacketType), uint32_t(ctx.packet.type));
+      return ctx.packet.nextOffset = ctx.packet.currentOffset = 0;
+    }
+
+    // Read rest of packet
+    if (!readE57Bytes(ctx.e57, ctx.logger, ctx.packet.data + 4, packetOffset, ctx.packet.size - 4)) {
+      return ctx.packet.nextOffset = ctx.packet.currentOffset = 0;
+    }
+
+    // Decode data packet
+    if (ctx.packet.type == PacketType::Data) {
+      ctx.dataPacket.byteStreamsCount = getUint16LE(ctx.packet.data + 4);
+      uint32_t offset = 6 + 2 * ctx.dataPacket.byteStreamsCount;
+      for (size_t i = 0; i < ctx.dataPacket.byteStreamsCount; i++) {
+        ctx.dataPacket.byteStreamOffsets[i] = offset;
+        offset += getUint16LE(ctx.packet.data + 6 + 2 * i);
+        if (ctx.packet.size < offset) {
+          ctx.logger(2, "Bytestream offset %u beyond packet length %u", offset, ctx.packet.size);
+          return false;
+        }
+      }
+      ctx.dataPacket.byteStreamOffsets[ctx.dataPacket.byteStreamsCount] = offset;
+    }
+
+    if (!checkCurrentPacket(ctx)) {
+      return ctx.packet.nextOffset = ctx.packet.currentOffset = 0;
+    }
+
+    return ctx.packet.nextOffset = packetOffset;
+  }
 
 
     return true;
