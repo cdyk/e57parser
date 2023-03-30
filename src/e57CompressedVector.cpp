@@ -4,6 +4,7 @@
 #include <bit>
 #include <cassert>
 #include <cstring>
+#include <vector>
 
 namespace {
 
@@ -237,19 +238,6 @@ namespace {
           return false;
         }
 
-        BitUnpackState unpackState{};
-
-        BitUnpackDesc unpackDesc{
-          .maxItems = 2,
-          .byteStreamOffset = static_cast<uint32_t>(byteStreamOffset),
-          .bitsAvailable = 8 * static_cast<uint32_t>(byteStreamsByteCount)
-        };
-
-        consumeBits(ctx, unpackState, unpackDesc,  ctx.pts.components[i]);
-
-        unpackDesc.maxItems = 5;
-        consumeBits(ctx, unpackState, unpackDesc, ctx.pts.components[i]);
-
         byteStreamOffset = byteStreamEnd;
       }
 
@@ -345,6 +333,71 @@ namespace {
   }
 
 
+  struct ComponentReadState
+  {
+    uint64_t packetOffset = 0;
+
+    BitUnpackState unpackState{};
+    BitUnpackDesc unpackDesc{};
+
+    uint32_t stream = 0;
+  };
+
+
+  bool readPoints(Context& ctx, const Points& pts, uint64_t dataPhysicalOffset, uint64_t sectionPhysicalEnd)
+  {
+    size_t N = pts.components.size;
+    std::vector<ComponentReadState> readStates(N);
+ 
+    for(size_t i=0; i<N; i++) {
+      readStates[i].packetOffset = dataPhysicalOffset;
+      readStates[i].stream = static_cast<uint32_t>(i);
+      readStates[i].unpackState.bitsConsumed = AllBitsRead;
+      readStates[i].unpackDesc.maxItems = 5;
+    }
+
+    bool progress = false;
+
+    for (size_t it = 0; it < 3; it++) {
+
+      for (ComponentReadState& readState : readStates) {
+        readState.unpackState.itemsWritten = 0;
+      }
+
+      for (ComponentReadState& readState : readStates) {
+
+        if (readState.unpackState.itemsWritten < readState.unpackDesc.maxItems) {
+
+          // Todo: check if all are finished writing
+          // Todo: check if reading packets outside of section
+
+          if (readState.unpackState.bitsConsumed == AllBitsRead) {
+
+            // Read next package
+            readState.packetOffset = getPacket(ctx, readState.packetOffset, PacketType::Data);
+            if (readState.packetOffset == 0) return false;
+
+            if (ctx.dataPacket.byteStreamsCount <= readState.stream) {
+              ctx.logger(2, "Stream %u not in packet", uint32_t(readState.stream));
+              return false;
+            }
+
+            // Update unpack state and desc for newly read package
+            readState.unpackState.bitsConsumed = 0;
+            readState.unpackDesc.byteStreamOffset = ctx.dataPacket.byteStreamOffsets[readState.stream];
+            readState.unpackDesc.bitsAvailable = 8 * (ctx.dataPacket.byteStreamOffsets[readState.stream + 1] - readState.unpackDesc.byteStreamOffset);
+
+            progress = true;
+          }
+
+          // Consume bits
+          progress = consumeBits(ctx, readState.unpackState, readState.unpackDesc, pts.components[readState.stream]) || progress;
+        }
+      }
+
+      if (!progress) break;
+    }
+
     return true;
   }
 
@@ -412,6 +465,10 @@ bool parseE57CompressedVector(const E57File* e57, Logger logger, size_t pointsIn
 
   logger(0, "sectionLogicalLength=0x%zx dataPhysicalOffset=0x%zx indexPhysicalOffset=%zx sectionPhysicalEnd=0x%zx",
          sectionLogicalLength, dataPhysicalOffset, indexPhysicalOffset, sectionPhysicalEnd);
+
+  if (!readPoints(ctx, points, dataPhysicalOffset, sectionPhysicalEnd)) {
+    return false;
+  }
 
   while(dataPhysicalOffset < sectionPhysicalEnd) {
     if (!readPacket(ctx, dataPhysicalOffset)) {
