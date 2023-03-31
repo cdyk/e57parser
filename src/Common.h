@@ -59,6 +59,8 @@ protected:
     ((size_t*)ptr)[-1] = count;
   }
 
+  size_t _size() const { return ptr ? ((size_t*)ptr)[-1] : 0; }
+
 };
 
 template<typename T>
@@ -69,6 +71,8 @@ struct Buffer : public BufferBase
   const T* data() const { return (T*)ptr; }
   const T& operator[](size_t ix) const { return data()[ix]; }
   void accommodate(size_t count) { _accommodate(sizeof(T), count); }
+  size_t size() const { return _size() / sizeof(T); }
+
 };
 
 struct Arena

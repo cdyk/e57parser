@@ -1,6 +1,9 @@
 // This file is part of e57parser copyright 2023 Christopher Dyken
 // Released under the MIT license, please see LICENSE file for details.
 
+// Don't complain about fopen
+#define _CRT_SECURE_NO_WARNINGS
+
 #ifdef _WIN32
 
 #define WIN32_LEAN_AND_MEAN
@@ -20,6 +23,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <functional>
+#include <cinttypes>
 
 #include "Common.h"
 #include "e57File.h"
@@ -160,6 +164,76 @@ namespace {
     return View<const char>(mappedFile->ptr + static_cast<size_t>(offset), size);
   }
 
+ 
+
+  struct PtsWriter
+  {
+    std::vector<ComponentWriteDesc> writeDescs;
+    Buffer<char> buffer;
+    size_t pointCapacity = 5;
+    FILE* file = nullptr;
+
+    bool addComponent(const Points& pts, size_t index, Component::Role role)
+    {
+      for (size_t i = 0; pts.components.size; i++) {
+        if (pts.components[i].role == role) {
+          writeDescs.push_back({
+            .offset = index * sizeof(float),
+            .stride = 3 * sizeof(float),
+            .type = ComponentWriteDesc::Type::Float,
+            .stream = static_cast<uint32_t>(i) });
+          return true;
+        }
+      }
+      return false;
+    }
+
+    bool init(const char* path, const Points& pts)
+    {
+      file = std::fopen(path, "w");
+      if (!file) {
+        logger(2, "Failed to open '%s' for writing\n", path);
+        return false;
+      }
+      fprintf(file, "%" PRIu64 "\n", pts.recordCount);
+
+      if (!addComponent(pts, 0, Component::Role::CartesianX)) {
+        logger(2, "No cartesian X component");
+        return false;
+      }
+      if (!addComponent(pts, 1, Component::Role::CartesianY)) {
+        logger(2, "No cartesian Y component");
+        return false;
+      }
+      if (!addComponent(pts, 2, Component::Role::CartesianZ)) {
+        logger(2, "No cartesian Z component");
+        return false;
+      }
+      assert(writeDescs.size() == 3);
+
+      buffer.accommodate(pointCapacity * 3 * sizeof(float));
+      return true;
+    }
+
+    bool destroy()
+    {
+      if (file) {
+        std::fclose(file);
+        file = nullptr;
+      }
+    }
+
+    static bool consumeCallback(void* data, size_t pointCount)
+    {
+      PtsWriter* that = reinterpret_cast<PtsWriter*>(data);
+      const float* ptr = reinterpret_cast<const float*>(that->buffer.data());
+      for (size_t i = 0; i < pointCount; i++) {
+        fprintf(that->file, "%f %f %f\n", ptr[3 * i + 0], ptr[3 * i + 1], ptr[3 * i + 2]);
+      }
+      return true;
+    }
+  };
+
 
 
 }
@@ -183,8 +257,25 @@ int main(int argc, char** argv)
       success = false;
     }
     else {
-      for (size_t i = 0; i < e57.points.size; i++) {
-        if (!parseE57CompressedVector(&e57, logger, i)) {
+
+      for (size_t k = 0; k < e57.points.size; k++) {
+        const Points& pts = e57.points[k];
+
+        PtsWriter writer;
+        
+        if (!writer.init("foobar.pts", pts)) {
+          return EXIT_SUCCESS;
+        }
+
+        ReadPointsArgs readPointsArgs{
+          .buffer = View<char>(writer.buffer.data(), writer.buffer.size()),
+          .writeDesc = View<const ComponentWriteDesc>(writer.writeDescs.data(), writer.writeDescs.size()),
+          .consumeCallback = PtsWriter::consumeCallback,
+          .consumeCallbackData = &writer,
+          .pointCapacity = writer.pointCapacity,
+          .pointSetIndex = 0
+        };
+        if (!readE57Points(&e57, logger, readPointsArgs)) {
           success = false;
           break;
         }

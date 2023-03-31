@@ -7,6 +7,9 @@
 // invocation of the callback, that is, the callback can reuse an internal buffer.
 typedef View<const char>(*ReadCallback)(void* callbackData, uint64_t offset, uint64_t size);
 
+
+typedef bool(*ConsumePointsCallback)(void* callbackData, size_t pointCount);
+
 struct Component
 {
   enum struct Role : uint32_t {
@@ -68,6 +71,18 @@ struct Component
   void initReal(Type type);
 };
 
+
+struct ComponentWriteDesc
+{
+  enum struct Type : uint32_t {
+    Float
+  };
+  size_t offset = 0;
+  size_t stride = 0;
+  Type type = Type::Float;
+  uint32_t stream = 0;
+};
+
 struct Points
 {
   uint64_t fileOffset;
@@ -114,4 +129,14 @@ bool openE57(E57File& e57, Logger logger, ReadCallback fileRead, void* fileReadD
 
 bool readE57Bytes(const E57File* e57, Logger logger, void* dst, uint64_t& physicalOffset, uint64_t bytesToRead);
 bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t xmlLength);
-bool parseE57CompressedVector(const E57File* e57File, Logger logger, size_t pointsIndex);
+
+struct ReadPointsArgs
+{
+  View<char> buffer;
+  View<const ComponentWriteDesc> writeDesc;
+  ConsumePointsCallback consumeCallback = nullptr;
+  void* consumeCallbackData = nullptr;
+  size_t pointCapacity = 0;
+  size_t pointSetIndex = 0;
+};
+bool readE57Points(const E57File* e57, Logger logger, const ReadPointsArgs& args);

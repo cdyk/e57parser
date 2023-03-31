@@ -18,6 +18,7 @@ namespace {
   {
     const E57File* e57 = nullptr;
     Logger logger = nullptr;
+    const ReadPointsArgs& args;
     const Points& pts;
 
     struct {
@@ -169,11 +170,10 @@ namespace {
 
     BitUnpackState unpackState{};
     BitUnpackDesc unpackDesc{};
-
-    uint32_t stream = 0;
   };
 
-  BitUnpackState consumeBits(const Context& ctx, const BitUnpackState& unpackState, const BitUnpackDesc& unpackDesc, const Component& comp)
+
+  BitUnpackState consumeBits(const Context& ctx, const BitUnpackState& unpackState, const BitUnpackDesc& unpackDesc, const ComponentWriteDesc& writeDesc, const Component& comp)
   {
     const size_t maxItems = unpackDesc.maxItems;
     const size_t byteStreamOffset = unpackDesc.byteStreamOffset;
@@ -181,6 +181,12 @@ namespace {
 
     uint32_t bitsConsumed = unpackState.bitsConsumed;
     size_t item = unpackState.itemsWritten;
+
+    char* ptr = ctx.args.buffer.data + writeDesc.offset;
+    char* end = ctx.args.buffer.data + ctx.args.buffer.size;
+    size_t stride = writeDesc.stride;
+
+    size_t moo = ctx.args.buffer.size;
 
     if (comp.type == Component::Type::Integer) {
       const uint8_t w = comp.integer.bitWidth;
@@ -201,7 +207,10 @@ namespace {
         bitsConsumedNext += w;
 
         int64_t value = comp.integer.min + static_cast<int64_t>(bits);
-        ctx.logger(0, "%zu: %llu", item, value);
+
+        char* pptr = ptr + stride * item;
+        assert(pptr + sizeof(float) <= end);
+        *reinterpret_cast<float*>(pptr) = static_cast<float>(value);
       }
     }
     else if (comp.type == Component::Type::ScaledInteger) {
@@ -223,7 +232,10 @@ namespace {
         bitsConsumedNext += w;
 
         int64_t value = comp.integer.min + static_cast<int64_t>(bits);
-        ctx.logger(0, "%zu: %f", item, comp.integer.scale * static_cast<double>(value) + comp.integer.offset);
+
+        char* pptr = ptr + stride * item;
+        assert(pptr + sizeof(float) <= end);
+        *reinterpret_cast<float*>(pptr) = static_cast<float>(comp.integer.scale * static_cast<double>(value) + comp.integer.offset);
       }
     }
     else if (comp.type == Component::Type::Float) {
@@ -242,7 +254,9 @@ namespace {
         bitsConsumed = bitsConsumedNext;
         bitsConsumedNext += w;
 
-        ctx.logger(0, "%zu: %f", item, value);
+        char* pptr = ptr + stride * item;
+        assert(pptr + sizeof(float) <= end);
+        *reinterpret_cast<float*>(pptr) = static_cast<float>(value);
       }
     }
     else if (comp.type == Component::Type::Double) {
@@ -261,7 +275,9 @@ namespace {
         bitsConsumed = bitsConsumedNext;
         bitsConsumedNext += w;
 
-        ctx.logger(0, "%zu: %f", item, value);
+        char* pptr = ptr + stride * item;
+        assert(pptr + sizeof(float) <= end);
+        *reinterpret_cast<float*>(pptr) = static_cast<float>(value);
       }
     }
 
@@ -270,7 +286,7 @@ namespace {
   }
 
 
-  bool readPointsIteration(Context& ctx, View<ComponentReadState> readStates, const Points& pts, size_t pointsToDo, uint64_t dataPhysicalOffset, uint64_t sectionPhysicalEnd)
+  bool readPointsIteration(Context& ctx, View<ComponentReadState> readStates, size_t pointsToDo, uint64_t dataPhysicalOffset, uint64_t sectionPhysicalEnd)
   {
     // Initialize items written for this round
     for (size_t i = 0; i < readStates.size; i++) {
@@ -285,6 +301,8 @@ namespace {
       done = true;
       for (size_t i = 0; i < readStates.size; i++) {
         ComponentReadState& readState = readStates[i];
+        const ComponentWriteDesc& writeDesc = ctx.args.writeDesc[i];
+        const uint32_t stream = writeDesc.stream;
 
         // Skip components where we have enough items
         if (readState.unpackState.itemsWritten < readState.unpackDesc.maxItems) {
@@ -299,18 +317,18 @@ namespace {
             readState.packetOffset = getPacket(ctx, readState.packetOffset, PacketType::Data);
             if (readState.packetOffset == 0) return false;
 
-            if (ctx.dataPacket.byteStreamsCount <= readState.stream) {
-              ctx.logger(2, "Stream %u not in packet", uint32_t(readState.stream));
+            if (ctx.dataPacket.byteStreamsCount <= stream) {
+              ctx.logger(2, "Stream %u not in packet", uint32_t(stream));
               return false;
             }
 
             // Update unpack state and desc for newly read package
             readState.unpackState.bitsConsumed = 0;
-            readState.unpackDesc.byteStreamOffset = ctx.dataPacket.byteStreamOffsets[readState.stream];
-            readState.unpackDesc.bitsAvailable = 8 * (ctx.dataPacket.byteStreamOffsets[readState.stream + 1] - readState.unpackDesc.byteStreamOffset);
+            readState.unpackDesc.byteStreamOffset = ctx.dataPacket.byteStreamOffsets[stream];
+            readState.unpackDesc.bitsAvailable = 8 * (ctx.dataPacket.byteStreamOffsets[stream + 1] - readState.unpackDesc.byteStreamOffset);
           }
 
-          BitUnpackState unpackStateNew = consumeBits(ctx, readState.unpackState, readState.unpackDesc, pts.components[readState.stream]);
+          BitUnpackState unpackStateNew = consumeBits(ctx, readState.unpackState, readState.unpackDesc, writeDesc, ctx.pts.components[stream]);
 
           assert((unpackStateNew.bitsConsumed == AllBitsRead || unpackStateNew.itemsWritten != readState.unpackState.itemsWritten) && "No progress");
 
@@ -326,29 +344,26 @@ namespace {
   }
 
 
-  bool readPoints(Context& ctx,  const Points& pts, uint64_t dataPhysicalOffset, uint64_t sectionPhysicalEnd)
+  bool readPoints(Context& ctx, uint64_t dataPhysicalOffset, uint64_t sectionPhysicalEnd)
   {
-    size_t M = 5; // number of points in one round 
+    std::vector<ComponentReadState> readStates_(ctx.args.writeDesc.size);
 
-    std::vector<ComponentReadState> readStates_(pts.components.size);
-
-    View<ComponentReadState> readStates(readStates_.data(), pts.components.size);
- 
-    for(size_t i=0; i<readStates.size; i++) {
+    View<ComponentReadState> readStates(readStates_.data(), ctx.args.writeDesc.size);
+    for (size_t i = 0; i < ctx.args.writeDesc.size; i++) {
       readStates[i].packetOffset = dataPhysicalOffset;
-      readStates[i].stream = static_cast<uint32_t>(i);
       readStates[i].unpackState.bitsConsumed = AllBitsRead;
       readStates[i].unpackDesc.maxItems = 5;
     }
 
     size_t pointsDone = 0;
-    while (pointsDone < pts.recordCount) {
-      size_t pointsToDo = std::min(pts.recordCount - pointsDone, M);
-      if (!readPointsIteration(ctx, readStates, pts, pointsToDo, dataPhysicalOffset, sectionPhysicalEnd)) {
+    while (pointsDone < ctx.pts.recordCount) {
+      size_t pointsToDo = std::min(ctx.pts.recordCount - pointsDone,ctx.args.pointCapacity);
+      if (!readPointsIteration(ctx, readStates, pointsToDo, dataPhysicalOffset, sectionPhysicalEnd)) {
         return false;
       }
 
       // callback to process the pointsToDo
+      ctx.args.consumeCallback(ctx.args.consumeCallbackData, pointsToDo);
 
       pointsDone += pointsToDo;
     }
@@ -373,18 +388,18 @@ namespace {
 }
 
 
-bool parseE57CompressedVector(const E57File* e57, Logger logger, size_t pointsIndex)
+bool readE57Points(const E57File* e57, Logger logger, const ReadPointsArgs& args)
 {
   Context ctx{
     .e57 = e57,
     .logger = logger,
-    .pts = e57->points[pointsIndex]
+    .args = args,
+    .pts = e57->points[args.pointSetIndex]
   };
 
 
-  const Points& points = e57->points[pointsIndex];
   logger(0, "Reading compressed vector: fileOffset=0x%zx recordCount=0x%zx",
-         points.fileOffset, points.recordCount);
+         ctx.pts.fileOffset, ctx.pts.recordCount);
 
   // CompressedVectorSectionHeader:
   // -----------------------------
@@ -400,7 +415,7 @@ bool parseE57CompressedVector(const E57File* e57, Logger logger, size_t pointsIn
   constexpr uint8_t CompressedVectorSectionId = 1;
   constexpr uint64_t CompressedVectorSectionHeaderSize = 8 + 3 * 8;
 
-  uint64_t fileOffset = points.fileOffset;
+  uint64_t fileOffset = ctx.pts.fileOffset;
 
   Buffer<char> buf;
   buf.accommodate(CompressedVectorSectionHeaderSize);
@@ -420,7 +435,7 @@ bool parseE57CompressedVector(const E57File* e57, Logger logger, size_t pointsIn
   uint64_t sectionLogicalLength = readUint64LE(ptr); 
 
   // Calculate section end 
-  uint64_t sectionPhysicalEnd = calculateSectionPhysicalEnd(ctx, points.fileOffset, sectionLogicalLength);
+  uint64_t sectionPhysicalEnd = calculateSectionPhysicalEnd(ctx, ctx.pts.fileOffset, sectionLogicalLength);
 
   // Offset of first datapacket
   uint64_t dataPhysicalOffset = readUint64LE(ptr);
@@ -431,7 +446,7 @@ bool parseE57CompressedVector(const E57File* e57, Logger logger, size_t pointsIn
   logger(0, "sectionLogicalLength=0x%zx dataPhysicalOffset=0x%zx indexPhysicalOffset=%zx sectionPhysicalEnd=0x%zx",
          sectionLogicalLength, dataPhysicalOffset, indexPhysicalOffset, sectionPhysicalEnd);
 
-  if (!readPoints(ctx, points, dataPhysicalOffset, sectionPhysicalEnd)) {
+  if (!readPoints(ctx, dataPhysicalOffset, sectionPhysicalEnd)) {
     return false;
   }
 
