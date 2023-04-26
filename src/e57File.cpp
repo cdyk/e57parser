@@ -162,6 +162,12 @@ bool readE57Bytes(const E57File* e57, Logger logger, void* dst_, uint64_t& physi
     page++;
   }
 
+  // If we end reading precisely on the end of a page payload before checksum,
+  // bump offset past the checksum so we resume on a valid physical offset.
+  if ((physicalOffset & e57->page.mask) == e57->page.logicalSize) {
+    physicalOffset += 4;
+  }
+
   return true;
 }
 
