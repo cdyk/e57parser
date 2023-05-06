@@ -53,7 +53,7 @@ namespace {
     int len = vsnprintf(buffer + 4, bufferSize, msg, arg);
     if (0 <= len && size_t(len) + 2 <= bufferSize) {
       buffer[4 + len] = '\n';
-      fwrite(buffer, 1, 4 + len + 1, stderr);
+      fwrite(buffer, 1, size_t(len) + 4 + 1, stderr);
     }
   }
 
@@ -306,7 +306,7 @@ Post bug reports or questions at https://github.com/cdyk/e57parser
       if ((ptr[offset] < '0') || ('9' < ptr[offset])) {
         goto fail;
       }
-      output = 10 * output + static_cast<size_t>(ptr[offset] - '0');
+      output = 10 * output + static_cast<size_t>(ptr[offset]) - static_cast<size_t>('0');
     }
     while (ptr[++offset] != '\0');
     return true;
