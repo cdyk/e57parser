@@ -36,3 +36,46 @@ jobs:
         path: msvc/x64/Release/e57parser.exe
 
 
+  linux-gcc:
+    runs-on: ubuntu-latest
+
+    env:
+      CXXFLAGS: -fms-extensions
+      CFLAGS: -fms-extensions
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - name: Build
+      run: |
+        cd make
+        make
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: linux-gcc-executable
+        path: make/e57parser
+
+
+  linux-clang:
+    runs-on: ubuntu-latest
+
+    env:
+      CXX: clang++
+      CC: clang
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - name: Build
+      run: |
+        cd make
+        make
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: linux-clang-executable
+        path: make/e57parser
+
