@@ -10,11 +10,11 @@
 
 #include "Common.h"
 
-void logTrace(Logger logger, PRE_VALIDATE_PRINTF const char* msg, ...) POST_VALIDATE_PRINTF(2) { va_list ap; va_start(ap, msg); logger(0, msg, ap); va_end(ap); }
-void logDebug(Logger logger, PRE_VALIDATE_PRINTF const char* msg, ...) POST_VALIDATE_PRINTF(2) { va_list ap; va_start(ap, msg); logger(1, msg, ap); va_end(ap); }
-void logInfo(Logger logger, PRE_VALIDATE_PRINTF const char* msg, ...) POST_VALIDATE_PRINTF(2) { va_list ap; va_start(ap, msg); logger(2, msg, ap); va_end(ap); }
-void logWarning(Logger logger, PRE_VALIDATE_PRINTF const char* msg, ...) POST_VALIDATE_PRINTF(2) { va_list ap; va_start(ap, msg); logger(3, msg, ap); va_end(ap); }
-void logError(Logger logger, PRE_VALIDATE_PRINTF const char* msg, ...) POST_VALIDATE_PRINTF(2) { va_list ap; va_start(ap, msg); logger(4, msg, ap); va_end(ap); }
+void logTrace(Logger logger, const char* msg, ...) { va_list ap; va_start(ap, msg); logger(0, msg, ap); va_end(ap); }
+void logDebug(Logger logger, const char* msg, ...) { va_list ap; va_start(ap, msg); logger(1, msg, ap); va_end(ap); }
+void logInfo(Logger logger, const char* msg, ...)  { va_list ap; va_start(ap, msg); logger(2, msg, ap); va_end(ap); }
+void logWarning(Logger logger, const char* msg, ...) { va_list ap; va_start(ap, msg); logger(3, msg, ap); va_end(ap); }
+void logError(Logger logger, const char* msg, ...) { va_list ap; va_start(ap, msg); logger(4, msg, ap); va_end(ap); }
 
 void BufferBase::free()
 {
