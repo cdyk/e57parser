@@ -35,3 +35,4 @@ jobs:
         name: windows-executable
         path: msvc15/x64/Release/e57parser.exe
 
+
