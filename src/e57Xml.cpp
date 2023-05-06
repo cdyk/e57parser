@@ -156,7 +156,7 @@ namespace {
   bool xmlElementEnter(void* userdata, cd_xml_doc_t* doc, cd_xml_ns_ix_t namespace_ix, cd_xml_stringview_t* name)
   {
     Context& ctx = *reinterpret_cast<Context*>(userdata);
-    logDebug(ctx.logger, "%.*s%.*s:", int(ctx.stack.size()), spaces, int(name->end - name->begin), name->begin);
+    logTrace(ctx.logger, "%.*s%.*s:", int(ctx.stack.size()), spaces, int(name->end - name->begin), name->begin);
 
     Element& elem = *ctx.stack.emplace_back(ctx.arena.alloc<Element>());
 
@@ -395,7 +395,7 @@ namespace {
   bool xmlText(void* userdata, cd_xml_doc_t* doc, cd_xml_stringview_t* text)
   {
     Context& ctx = *reinterpret_cast<Context*>(userdata);
-    logDebug(ctx.logger, "%.*sText %.*s", int(ctx.stack.size()), spaces, int(text->end - text->begin), text->begin);
+    logTrace(ctx.logger, "%.*sText %.*s", int(ctx.stack.size()), spaces, int(text->end - text->begin), text->begin);
 
     size_t N = ctx.stack.size();
 
@@ -511,30 +511,6 @@ bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t x
   }
 
   logDebug(ctx.logger, "Parsed points");
-  for (size_t j = 0; j < ctx.e57File->points.size; j++) {
-    const Points& points = ctx.e57File->points[j];
-    logDebug(ctx.logger, "%zu: fileOffset=%zu recordCount=%zu", j, points.fileOffset, points.recordCount);
-    for (size_t i = 0; i < points.components.size; i++) {
-      const Component& comp = points.components[i];
-      switch (comp.type) {
-      case Component::Type::Integer:
-        logDebug(ctx.logger, "   %zu: integer min=%d max=%d", i, comp.integer.min, comp.integer.max);
-        break;
-      case Component::Type::ScaledInteger:
-        logDebug(ctx.logger, "   %zu: scaled integer min=%d max=%d scale=%f offset=%f", i, comp.integer.min, comp.integer.max, comp.integer.scale, comp.integer.offset);
-        break;
-      case Component::Type::Float:
-        logDebug(ctx.logger, "   %zu: float min=%f max=%f", i, comp.real.min, comp.real.max);
-        break;
-      case Component::Type::Double:
-        logDebug(ctx.logger, "   %zu: double min=%f max=%f", i, comp.real.min, comp.real.max);
-        break;
-      default:
-        assert(false);
-        break;
-      }
-    }
-  }
 
   return true;
 }

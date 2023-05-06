@@ -73,12 +73,6 @@ namespace {
     e57->header.xmlLogicalLength = readUint64LE(curr);
     e57->header.pageSize = readUint64LE(curr);
 
-    logDebug(logger, "version=%" PRIu32 ".%" PRIu32 ", length=%" PRIu64 ", xmlOffset=%" PRIu64 ", xmlLength=%" PRIu64 ", pageSize=%" PRIu64,
-               e57->header.major, e57->header.minor,
-               e57->header.filePhysicalLength,
-               e57->header.xmlPhysicalOffset, e57->header.xmlLogicalLength,
-               e57->header.pageSize);
-
     if ((e57->header.pageSize == 0) || (e57->header.pageSize & (e57->header.pageSize - 1)) != 0) {
       logError(logger, "page size is not a power of 2");
       return false;
@@ -210,10 +204,6 @@ bool openE57(E57File& e57, Logger logger, ReadCallback fileRead, void* fileReadD
     return false;
   }
 
-#if 1
-  fwrite(xml.data(), 1, e57.header.xmlLogicalLength, stderr);
-  logDebug(logger, "----");
-#endif
 
   if (!parseE57Xml(&e57, logger, xml.data(), e57.header.xmlLogicalLength)) {
     return false;
