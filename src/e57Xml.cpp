@@ -314,7 +314,7 @@ namespace {
       switch (component.type) {
       case Component::Type::Float:
       case Component::Type::Double: {
-        if (value == "singe") {
+        if (value == "single") {
           component.type = Component::Type::Float;
         }
         else if (value == "double") {
