@@ -133,7 +133,7 @@ bool readE57Bytes(const E57File* e57, Logger logger, void* dst_, uint64_t& physi
   size_t page = physicalOffset >> e57->page.shift;
   size_t offsetInPage = physicalOffset & e57->page.mask;
   if (e57->page.logicalSize <= offsetInPage) {
-    logError(logger, "Physical offset %zu is outside page payload", physicalOffset);
+    logError(logger, "Physical offset %" PRIu64 " is outside page payload", physicalOffset);
     return false;
   }
 
@@ -144,7 +144,7 @@ bool readE57Bytes(const E57File* e57, Logger logger, void* dst_, uint64_t& physi
     if (!checkPage(e57, logger, pageBytes)) {
       return false;
     }
-    size_t bytesToReadFromPage = std::min(e57->page.logicalSize - offsetInPage, bytesToRead);
+    size_t bytesToReadFromPage = size_t(std::min(uint64_t(e57->page.logicalSize - offsetInPage), bytesToRead));
 #if 0
     logDebug(logger, "copy %zu bytes from page %zu", bytesToReadFromPage, page);
 #endif
