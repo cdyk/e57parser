@@ -34,6 +34,18 @@ Options:
   --output-pts=<filename.pts>  Write the selected point set to file as pts.
 ```
 
+## Binary releases
+
+No releases yet, but exectuables are published as artifacts from the [CI builds](https://github.com/cdyk/e57parser/actions/workflows/build.yml).
+
+## Building from source on windows
+
+Clone repo, open msvc\e57parser.sln and build the solution.
+
+## Building from source on linux and MacOS (gcc or clang)
+
+Clone repo, enter `make` directory and type `make`.
+
 ## License
 
 This application is available to anybody free of charge, under the terms of the MIT License (see LICENSE).
