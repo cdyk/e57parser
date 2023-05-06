@@ -4,6 +4,7 @@
 #include <bit>
 #include <cassert>
 #include <cstring>
+#include <cinttypes>
 #include <vector>
 
 namespace {
@@ -355,9 +356,9 @@ namespace {
       readStates[i].unpackDesc.maxItems = 5;
     }
 
-    size_t pointsDone = 0;
+    uint64_t pointsDone = 0;
     while (pointsDone < ctx.pts.recordCount) {
-      size_t pointsToDo = std::min(ctx.pts.recordCount - pointsDone,ctx.args.pointCapacity);
+      size_t pointsToDo = size_t(std::min(ctx.pts.recordCount - pointsDone, uint64_t(ctx.args.pointCapacity)));
       if (!readPointsIteration(ctx, readStates, pointsToDo, dataPhysicalOffset, sectionPhysicalEnd)) {
         return false;
       }
@@ -398,7 +399,7 @@ bool readE57Points(const E57File* e57, Logger logger, const ReadPointsArgs& args
   };
 
 
-  logDebug(ctx.logger, "Reading compressed vector %zu: fileOffset=0x%zx recordCount=0x%zx",
+  logDebug(ctx.logger, "Reading compressed vector %zu: fileOffset=0x%" PRIx64 " recordCount=0x%" PRIx64,
            args.pointSetIndex, ctx.pts.fileOffset, ctx.pts.recordCount);
 
   // CompressedVectorSectionHeader:
@@ -443,7 +444,7 @@ bool readE57Points(const E57File* e57, Logger logger, const ReadPointsArgs& args
   // Offset of first index packet
   uint64_t indexPhysicalOffset = readUint64LE(ptr);
 
-  logDebug(ctx.logger, "sectionLogicalLength=0x%zx dataPhysicalOffset=0x%zx indexPhysicalOffset=%zx sectionPhysicalEnd=0x%zx",
+  logDebug(ctx.logger, "sectionLogicalLength=0x%" PRIx64 " dataPhysicalOffset=0x%" PRIx64 " indexPhysicalOffset=%" PRIx64 " sectionPhysicalEnd=0x%" PRIx64,
          sectionLogicalLength, dataPhysicalOffset, indexPhysicalOffset, sectionPhysicalEnd);
 
   if (!readPoints(ctx, dataPhysicalOffset, sectionPhysicalEnd)) {
