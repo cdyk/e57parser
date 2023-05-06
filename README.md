@@ -1,5 +1,7 @@
 # e57parser
 
+[![Build Status](https://github.com/cdyk/e57parser/actions/workflows/build.yml/badge.svg)](https://github.com/cdyk/e57parser/actions/)
+
 Playground for parsing e57 files.
 
 Written completely from scratch, intended to be small and with no dependencies so it is trivial to include in existing projects.

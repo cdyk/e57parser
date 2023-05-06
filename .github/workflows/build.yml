@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main" ]
 
 permissions:
   contents: read
@@ -15,7 +15,7 @@ jobs:
     runs-on: windows-latest
 
     env:
-      SOLUTION_FILE_PATH: msvc15/e57parser.sln
+      SOLUTION_FILE_PATH: msvc/e57parser.sln
       BUILD_CONFIGURATION: Release
 
     steps:
@@ -33,5 +33,6 @@ jobs:
     - uses: actions/upload-artifact@v3
       with:
         name: windows-executable
-        path: msvc15/x64/Release/e57parser.exe
+        path: msvc/x64/Release/e57parser.exe
+
 
