@@ -115,6 +115,7 @@ namespace {
     return true;
   }
 
+#if 0
   bool parseNumber(int32_t& dst, const cd_xml_stringview_t* text)
   {
     const std::string str(text->begin, text->end);
@@ -127,6 +128,7 @@ namespace {
     }
     return true;
   }
+#endif
 
   bool parseNumber(int64_t& dst, const cd_xml_stringview_t* text)
   {
