@@ -37,7 +37,7 @@ namespace {
   {
     View<const char> rv = e57->fileRead(e57->fileReadData, offset, size);
     if (rv.size != size) {
-      logger(2, "File read error, offset=%" PRIu64 ", size=%" PRIu64, offset, size);
+      logError(logger, "File read error, offset=%" PRIu64 ", size=%" PRIu64, offset, size);
       rv.data = nullptr;
       rv.size = 0;
     }
@@ -48,7 +48,7 @@ namespace {
   {
     const size_t headerSize = 8 + 2 * 4 + 4 * 8;
     if (e57->fileSize < headerSize) {
-      logger(2, "File smaller than e57 file header");
+      logError(logger, "File smaller than e57 file header");
       return false;
     }
 
@@ -60,7 +60,7 @@ namespace {
     const char* curr = bytes.data;
 
     if (std::memcmp("ASTM-E57", curr, 8) != 0) {
-      logger(2, "Wrong file signature");
+      logError(logger, "Wrong file signature");
       return false;
     }
     curr += 8;
@@ -73,14 +73,14 @@ namespace {
     e57->header.xmlLogicalLength = readUint64LE(curr);
     e57->header.pageSize = readUint64LE(curr);
 
-    logger(0, "version=%" PRIu32 ".%" PRIu32 ", length=%" PRIu64 ", xmlOffset=%" PRIu64 ", xmlLength=%" PRIu64 ", pageSize=%" PRIu64,
+    logDebug(logger, "version=%" PRIu32 ".%" PRIu32 ", length=%" PRIu64 ", xmlOffset=%" PRIu64 ", xmlLength=%" PRIu64 ", pageSize=%" PRIu64,
                e57->header.major, e57->header.minor,
                e57->header.filePhysicalLength,
                e57->header.xmlPhysicalOffset, e57->header.xmlLogicalLength,
                e57->header.pageSize);
 
     if ((e57->header.pageSize == 0) || (e57->header.pageSize & (e57->header.pageSize - 1)) != 0) {
-      logger(2, "page size is not a power of 2");
+      logError(logger, "page size is not a power of 2");
       return false;
     }
 
@@ -89,7 +89,7 @@ namespace {
     e57->page.mask = e57->page.size - 1;
     e57->page.shift = static_cast<uint8_t>(std::countr_zero(e57->header.pageSize));
 
-    logger(0, "pageSize=0x%zx pageMask=0x%zx pageShift=%u", e57->page.size, e57->page.mask, e57->page.shift);
+    logDebug(logger, "pageSize=0x%zx pageMask=0x%zx pageShift=%u", e57->page.size, e57->page.mask, e57->page.shift);
 
     return true;
   }
@@ -124,7 +124,7 @@ namespace {
     // For some reason the CRC calc above gets endian swapped, so we read this as big endian for now...
     uint32_t crcRef = uint32_t(ptr[0]) << 24 | uint32_t(ptr[1]) << 16 | uint32_t(ptr[2]) << 8 | uint32_t(ptr[3]);
     if (crc != crcRef) {
-      logger(2, "CRC error, expected 0x%8x, got 0x%8x", crcRef, crc);
+      logError(logger, "CRC error, expected 0x%8x, got 0x%8x", crcRef, crc);
       return false;
     }
 
@@ -138,7 +138,7 @@ bool readE57Bytes(const E57File* e57, Logger logger, void* dst_, uint64_t& physi
   size_t page = physicalOffset >> e57->page.shift;
   size_t offsetInPage = physicalOffset & e57->page.mask;
   if (e57->page.logicalSize <= offsetInPage) {
-    logger(2, "Physical offset %zu is outside page payload", physicalOffset);
+    logError(logger, "Physical offset %zu is outside page payload", physicalOffset);
     return false;
   }
 
@@ -151,7 +151,7 @@ bool readE57Bytes(const E57File* e57, Logger logger, void* dst_, uint64_t& physi
     }
     size_t bytesToReadFromPage = std::min(e57->page.logicalSize - offsetInPage, bytesToRead);
 #if 0
-    logger(0, "copy %zu bytes from page %zu", bytesToReadFromPage, page);
+    logDebug(logger, "copy %zu bytes from page %zu", bytesToReadFromPage, page);
 #endif
     std::memcpy(dst, pageBytes.data + offsetInPage, bytesToReadFromPage);
     physicalOffset = page * e57->header.pageSize + offsetInPage + bytesToReadFromPage;
@@ -189,7 +189,7 @@ void Component::initReal(Type type_) {
 bool openE57(E57File& e57, Logger logger, ReadCallback fileRead, void* fileReadData, uint64_t fileSize)
 {
   if (e57.ready) {
-    logger(2, "E57 file object already open");
+    logError(logger, "E57 file object already open");
     return false;
   }
 
@@ -211,7 +211,7 @@ bool openE57(E57File& e57, Logger logger, ReadCallback fileRead, void* fileReadD
 
 #if 1
   fwrite(xml.data(), 1, e57.header.xmlLogicalLength, stderr);
-  logger(0, "----");
+  logDebug(logger, "----");
 #endif
 
   if (!parseE57Xml(&e57, logger, xml.data(), e57.header.xmlLogicalLength)) {

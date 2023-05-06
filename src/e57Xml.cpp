@@ -156,7 +156,7 @@ namespace {
   bool xmlElementEnter(void* userdata, cd_xml_doc_t* doc, cd_xml_ns_ix_t namespace_ix, cd_xml_stringview_t* name)
   {
     Context& ctx = *reinterpret_cast<Context*>(userdata);
-    ctx.logger(0, "%.*s%.*s:", int(ctx.stack.size()), spaces, int(name->end - name->begin), name->begin);
+    logDebug(ctx.logger, "%.*s%.*s:", int(ctx.stack.size()), spaces, int(name->end - name->begin), name->begin);
 
     Element& elem = *ctx.stack.emplace_back(ctx.arena.alloc<Element>());
 
@@ -233,9 +233,9 @@ namespace {
 
     switch (elem->kind) {
     case Element::Kind::CartesianBounds:
-      ctx.logger(0, ">>> Parsed cartesian bounds [%.2f %.2f %.2f] x [%.2f %.2f %.2f]:",
-                 elem->cartesianBounds.xMin, elem->cartesianBounds.yMin, elem->cartesianBounds.zMin,
-                 elem->cartesianBounds.xMax, elem->cartesianBounds.yMax, elem->cartesianBounds.zMax);
+      logDebug(ctx.logger, ">>> Parsed cartesian bounds [%.2f %.2f %.2f] x [%.2f %.2f %.2f]:",
+               elem->cartesianBounds.xMin, elem->cartesianBounds.yMin, elem->cartesianBounds.zMin,
+               elem->cartesianBounds.xMax, elem->cartesianBounds.yMax, elem->cartesianBounds.zMax);
       break;
 
     case Element::Kind::Points:
@@ -248,13 +248,13 @@ namespace {
         points->points.components.pushBack(elem);
       }
       else {
-        ctx.logger(2, "Unexpected %s", elementKindString[static_cast<size_t>(elem->kind)]);
+        logError(ctx.logger, "Unexpected %s", elementKindString[static_cast<size_t>(elem->kind)]);
         return false;
       }
       break;
     }
 
-    //ctx.logger(0, "< %.*s", int(name->end - name->begin), name->begin);
+    //logDebug(ctx.logger, "< %.*s", int(name->end - name->begin), name->begin);
     ctx.stack.pop_back();
     return true;
   }
@@ -274,7 +274,7 @@ namespace {
         component.initReal(Component::Type::Double);
       }
       else {
-        ctx.logger(2, "Unexpected component type %.*s", int(value.size()), value.data());
+        logError(ctx.logger, "Unexpected component type %.*s", int(value.size()), value.data());
         return false;
       }
     }
@@ -291,7 +291,7 @@ namespace {
         return parseNumber(component.real.min, val);
 
       default:
-        ctx.logger(2, "Attribute 'minimum' not valid for component type %u", uint32_t(component.type));
+        logError(ctx.logger, "Attribute 'minimum' not valid for component type %u", uint32_t(component.type));
         return false;
       }
     }
@@ -305,7 +305,7 @@ namespace {
       case Component::Type::Double:
         return parseNumber(component.real.max, val);
       default:
-        ctx.logger(2, "Attribute 'maximum' not valid for component type %u", uint32_t(component.type));
+        logError(ctx.logger, "Attribute 'maximum' not valid for component type %u", uint32_t(component.type));
         return false;
       }
     }
@@ -321,13 +321,13 @@ namespace {
           component.type = Component::Type::Double;
         }
         else {
-          ctx.logger(2, "Unrecognized 'precision' value '%.*s'", int(value.length()), value.data());
+          logError(ctx.logger, "Unrecognized 'precision' value '%.*s'", int(value.length()), value.data());
           return false;
         }
         break;
       }
       default:
-        ctx.logger(2, "Attribute 'precision' not valid for component type %u", uint32_t(component.type));
+        logError(ctx.logger, "Attribute 'precision' not valid for component type %u", uint32_t(component.type));
         return false;
       }
     }
@@ -337,7 +337,7 @@ namespace {
         return parseNumber(component.integer.scale, val);
       }
       else {
-        ctx.logger(2, "Attribute 'scale' not valid for component type %u", uint32_t(component.type));
+        logError(ctx.logger, "Attribute 'scale' not valid for component type %u", uint32_t(component.type));
         return false;
       }
     }
@@ -347,7 +347,7 @@ namespace {
         return parseNumber(component.integer.offset, val);
       }
       else {
-        ctx.logger(2, "Attribute 'offset' not valid for component type %u", uint32_t(component.type));
+        logError(ctx.logger, "Attribute 'offset' not valid for component type %u", uint32_t(component.type));
         return false;
       }
     }
@@ -366,7 +366,7 @@ namespace {
     else if (key == "recordCount") {
       return parseNumber(points.recordCount, val);
     }
-    ctx.logger(2, "In <points>, unexpected attribute %.*s='%.*s'",
+    logError(ctx.logger, "In <points>, unexpected attribute %.*s='%.*s'",
                int(name->end - name->begin), name->begin,
                int(val->end - val->begin), val->begin);
     return false;
@@ -395,7 +395,7 @@ namespace {
   bool xmlText(void* userdata, cd_xml_doc_t* doc, cd_xml_stringview_t* text)
   {
     Context& ctx = *reinterpret_cast<Context*>(userdata);
-    ctx.logger(0, "%.*sText %.*s", int(ctx.stack.size()), spaces, int(text->end - text->begin), text->begin);
+    logDebug(ctx.logger, "%.*sText %.*s", int(ctx.stack.size()), spaces, int(text->end - text->begin), text->begin);
 
     size_t N = ctx.stack.size();
 
@@ -452,14 +452,14 @@ bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t x
     default:  assert(false && "Invalid status enum");    break;
     }
 
-    ctx.logger(2, "Failed to parse xml: %s", what);
+    logError(ctx.logger, "Failed to parse xml: %s", what);
     return false;
   }
 
   if (!cd_xml_apply_visitor(doc, &ctx, xmlElementEnter, xmlElementExit, xmlAttribute, xmlText)) {
     return false;
   }
-  ctx.logger(0, "XML parsed successfully");
+  logDebug(ctx.logger, "XML parsed successfully");
 
   ctx.e57File->points.size = ctx.points.size();
   ctx.e57File->points.data = ctx.e57File->arena.allocArray<Points>(ctx.e57File->points.size);
@@ -485,7 +485,7 @@ bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t x
       case Component::Type::Float:
       case Component::Type::Double:
         if (dstComp.real.max < dstComp.real.min) {
-          ctx.logger(2, "Float/double component min is larger than max");
+          logError(ctx.logger, "Float/double component min is larger than max");
           return false;
         }
         break;
@@ -493,7 +493,7 @@ bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t x
       case Component::Type::Integer:
       case Component::Type::ScaledInteger: {
         if (dstComp.integer.max < dstComp.integer.min) {
-          ctx.logger(2, "Integer/scaled integer component min is larger than max");
+          logError(ctx.logger, "Integer/scaled integer component min is larger than max");
           return false;
         }
         int64_t diff = dstComp.integer.max - dstComp.integer.min;
@@ -501,7 +501,7 @@ bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t x
         break;
       }
       default:
-        ctx.logger(2, "Illegal component type");
+        logError(ctx.logger, "Illegal component type");
         return false;
       }
 
@@ -510,24 +510,24 @@ bool parseE57Xml(E57File* e57File, Logger logger, const char* xmlBytes, size_t x
     }
   }
 
-  ctx.logger(0, "Parsed points");
+  logDebug(ctx.logger, "Parsed points");
   for (size_t j = 0; j < ctx.e57File->points.size; j++) {
     const Points& points = ctx.e57File->points[j];
-    ctx.logger(0, "%zu: fileOffset=%zu recordCount=%zu", j, points.fileOffset, points.recordCount);
+    logDebug(ctx.logger, "%zu: fileOffset=%zu recordCount=%zu", j, points.fileOffset, points.recordCount);
     for (size_t i = 0; i < points.components.size; i++) {
       const Component& comp = points.components[i];
       switch (comp.type) {
       case Component::Type::Integer:
-        ctx.logger(0, "   %zu: integer min=%d max=%d", i, comp.integer.min, comp.integer.max);
+        logDebug(ctx.logger, "   %zu: integer min=%d max=%d", i, comp.integer.min, comp.integer.max);
         break;
       case Component::Type::ScaledInteger:
-        ctx.logger(0, "   %zu: scaled integer min=%d max=%d scale=%f offset=%f", i, comp.integer.min, comp.integer.max, comp.integer.scale, comp.integer.offset);
+        logDebug(ctx.logger, "   %zu: scaled integer min=%d max=%d scale=%f offset=%f", i, comp.integer.min, comp.integer.max, comp.integer.scale, comp.integer.offset);
         break;
       case Component::Type::Float:
-        ctx.logger(0, "   %zu: float min=%f max=%f", i, comp.real.min, comp.real.max);
+        logDebug(ctx.logger, "   %zu: float min=%f max=%f", i, comp.real.min, comp.real.max);
         break;
       case Component::Type::Double:
-        ctx.logger(0, "   %zu: double min=%f max=%f", i, comp.real.min, comp.real.max);
+        logDebug(ctx.logger, "   %zu: double min=%f max=%f", i, comp.real.min, comp.real.max);
         break;
       default:
         assert(false);

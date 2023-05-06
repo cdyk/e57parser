@@ -90,13 +90,13 @@ namespace {
     ctx.packet.type = static_cast<PacketType>(ctx.packet[0]);
     ctx.packet.size = size_t(ctx.packet[2]) + (size_t(ctx.packet[3]) << 8) + 1;
     if (ctx.packet.size < 4) {
-      ctx.logger(2, "Packet size %zu is less than header size (=4)", ctx.packet.size);
+      logError(ctx.logger, "Packet size %zu is less than header size (=4)", ctx.packet.size);
       return ctx.packet.nextOffset = ctx.packet.currentOffset = 0;
     }
 
     // Check if packet is the expected type
     if (ctx.packet.type != expectedPacketType) {
-      ctx.logger(2, "Unexpected packet type, expected 0x%x but got 0x%x", uint32_t(expectedPacketType), uint32_t(ctx.packet.type));
+      logError(ctx.logger, "Unexpected packet type, expected 0x%x but got 0x%x", uint32_t(expectedPacketType), uint32_t(ctx.packet.type));
       return ctx.packet.nextOffset = ctx.packet.currentOffset = 0;
     }
 
@@ -111,20 +111,20 @@ namespace {
       size_t entryCount = getUint16LE(ctx.packet.data + 4);
       uint8_t indexLevel = ctx.packet[6];
       // Payload starts at 16, entryCount of struct { uint64_t chunkRecordNumber, chunkPhysicalOffset = 0 }
-      ctx.logger(0, "Index packet: size=%zu flags=%u entryCount=%zu indexLevel=%u", ctx.packet.size, flags, entryCount, indexLevel);
+      logDebug(ctx.logger, "Index packet: size=%zu flags=%u entryCount=%zu indexLevel=%u", ctx.packet.size, flags, entryCount, indexLevel);
     }
 
     // Decode data packet
     else if (ctx.packet.type == PacketType::Data) {
 
       if ((ctx.packet.size & 3) != 0) {
-        ctx.logger(2, "Packet size=%zu is not a multiple of 4", ctx.packet.size);
+        logError(ctx.logger, "Packet size=%zu is not a multiple of 4", ctx.packet.size);
         return ctx.packet.nextOffset = ctx.packet.currentOffset = 0;
       }
 
       ctx.dataPacket.byteStreamsCount = getUint16LE(ctx.packet.data + 4);
       if (ctx.dataPacket.byteStreamsCount == 0) {
-        ctx.logger(2, "No bytestreams in packet");
+        logError(ctx.logger, "No bytestreams in packet");
         return ctx.packet.nextOffset = ctx.packet.currentOffset = 0;
       }
 
@@ -133,16 +133,16 @@ namespace {
         ctx.dataPacket.byteStreamOffsets[i] = offset;
         offset += getUint16LE(ctx.packet.data + 6 + 2 * i);
         if (ctx.packet.size < offset) {
-          ctx.logger(2, "Bytestream offset %u beyond packet length %u", offset, ctx.packet.size);
+          logError(ctx.logger, "Bytestream offset %u beyond packet length %zu", offset, ctx.packet.size);
           return ctx.packet.nextOffset = ctx.packet.currentOffset = 0;
         }
       }
       ctx.dataPacket.byteStreamOffsets[ctx.dataPacket.byteStreamsCount] = offset;
-      ctx.logger(0, "Got data packet: size=%zu byteStreamCount=%zu expectedPacketSize=%zu", ctx.packet.size, ctx.dataPacket.byteStreamsCount, offset);
+      logTrace(ctx.logger, "Got data packet: size=%zu byteStreamCount=%u expectedPacketSize=%u", ctx.packet.size, ctx.dataPacket.byteStreamsCount, offset);
     }
 
     else if (ctx.packet.type == PacketType::Empty) {
-      ctx.logger(0, "Empty packet: size=%zu ", ctx.packet.size);
+      logDebug(ctx.logger, "Empty packet: size=%zu ", ctx.packet.size);
     }
 
     return ctx.packet.nextOffset = packetOffset;
@@ -311,14 +311,14 @@ namespace {
           if (readState.unpackState.bitsConsumed == AllBitsRead) {
 
             if (sectionPhysicalEnd <= readState.packetOffset) {
-              ctx.logger(2, "Premature end of section when reading compressed vector");
+              logError(ctx.logger, "Premature end of section when reading compressed vector");
               return false;
             }
             readState.packetOffset = getPacket(ctx, readState.packetOffset, PacketType::Data);
             if (readState.packetOffset == 0) return false;
 
             if (ctx.dataPacket.byteStreamsCount <= stream) {
-              ctx.logger(2, "Stream %u not in packet", uint32_t(stream));
+              logError(ctx.logger, "Stream %u not in packet", uint32_t(stream));
               return false;
             }
 
@@ -398,8 +398,8 @@ bool readE57Points(const E57File* e57, Logger logger, const ReadPointsArgs& args
   };
 
 
-  logger(0, "Reading compressed vector %zu: fileOffset=0x%zx recordCount=0x%zx",
-         args.pointSetIndex, ctx.pts.fileOffset, ctx.pts.recordCount);
+  logDebug(ctx.logger, "Reading compressed vector %zu: fileOffset=0x%zx recordCount=0x%zx",
+           args.pointSetIndex, ctx.pts.fileOffset, ctx.pts.recordCount);
 
   // CompressedVectorSectionHeader:
   // -----------------------------
@@ -426,7 +426,7 @@ bool readE57Points(const E57File* e57, Logger logger, const ReadPointsArgs& args
 
   const char* ptr = buf.data();
   if (uint8_t sectionId = static_cast<uint8_t>(*ptr); sectionId != CompressedVectorSectionId) {
-    logger(2, "Expected section id 0x%x, got 0x%x", CompressedVectorSectionId, sectionId);
+    logError(ctx.logger, "Expected section id 0x%x, got 0x%x", CompressedVectorSectionId, sectionId);
     return false;
   }
   ptr += 8;
@@ -443,7 +443,7 @@ bool readE57Points(const E57File* e57, Logger logger, const ReadPointsArgs& args
   // Offset of first index packet
   uint64_t indexPhysicalOffset = readUint64LE(ptr);
 
-  logger(0, "sectionLogicalLength=0x%zx dataPhysicalOffset=0x%zx indexPhysicalOffset=%zx sectionPhysicalEnd=0x%zx",
+  logDebug(ctx.logger, "sectionLogicalLength=0x%zx dataPhysicalOffset=0x%zx indexPhysicalOffset=%zx sectionPhysicalEnd=0x%zx",
          sectionLogicalLength, dataPhysicalOffset, indexPhysicalOffset, sectionPhysicalEnd);
 
   if (!readPoints(ctx, dataPhysicalOffset, sectionPhysicalEnd)) {

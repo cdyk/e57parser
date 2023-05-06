@@ -30,19 +30,29 @@
 
 namespace {
 
-  void logger(unsigned level, const char* msg, ...)
+  size_t logLevel = 1;
+
+  void logger(size_t level, const char* msg, va_list arg)
   {
-    switch (level) {
-    case 0: fprintf(stderr, "[I] "); break;
-    case 1: fprintf(stderr, "[W] "); break;
-    case 2: fprintf(stderr, "[E] "); break;
+    if (level < logLevel) {
+      return;
+    }
+    static thread_local char buffer[512] = { "[*] " };
+
+    if (4 <= level) {
+      assert(false && "Invalid loglevel");
+      return;
     }
 
-    va_list argptr;
-    va_start(argptr, msg);
-    vfprintf(stderr, msg, argptr);
-    va_end(argptr);
-    fprintf(stderr, "\n");
+    const char levels[4] = {'T', 'D', 'W', 'E'};
+    buffer[1] = levels[level];
+
+    constexpr size_t bufferSize = sizeof(buffer) - 4;
+    int len = vsnprintf(buffer + 4, bufferSize, msg, arg);
+    if (0 <= len && len + 2 <= bufferSize) {
+      buffer[len] = '\n';
+      fwrite(buffer, 1,  len + 1, stderr);
+    }
   }
 
   using ProcessFileFunc = std::function<bool(const char* ptr, size_t size)>;
@@ -54,7 +64,7 @@ namespace {
     {
       h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
       if (h == INVALID_HANDLE_VALUE) {
-        logger(2, "CreateFileA returned INVALID_HANDLE_VALUE");
+        logError(logger, "CreateFileA returned INVALID_HANDLE_VALUE");
         return;
       }
       DWORD hiSize;
@@ -63,13 +73,13 @@ namespace {
 
       m = CreateFileMappingA(h, 0, PAGE_READONLY, 0, 0, NULL);
       if (m == INVALID_HANDLE_VALUE) {
-        logger(2, "CreateFileMappingA returned INVALID_HANDLE_VALUE");
+        logError(logger, "CreateFileMappingA returned INVALID_HANDLE_VALUE");
         return;
 
       }
       ptr = static_cast<const char*>(MapViewOfFile(m, FILE_MAP_READ, 0, 0, 0));
       if (ptr == nullptr) {
-        logger(2, "MapViewOfFile returned INVALID_HANDLE_VALUE");
+        logError(logger, "MapViewOfFile returned INVALID_HANDLE_VALUE");
         return;
       }
       good = true;
@@ -192,21 +202,21 @@ namespace {
     {
       file = std::fopen(path, "w");
       if (!file) {
-        logger(2, "Failed to open '%s' for writing\n", path);
+        logError(logger, "Failed to open '%s' for writing\n", path);
         return false;
       }
       fprintf(file, "%" PRIu64 "\n", pts.recordCount);
 
       if (!addComponent(pts, 0, Component::Role::CartesianX)) {
-        logger(2, "No cartesian X component");
+        logError(logger, "No cartesian X component");
         return false;
       }
       if (!addComponent(pts, 1, Component::Role::CartesianY)) {
-        logger(2, "No cartesian Y component");
+        logError(logger, "No cartesian Y component");
         return false;
       }
       if (!addComponent(pts, 2, Component::Role::CartesianZ)) {
-        logger(2, "No cartesian Z component");
+        logError(logger, "No cartesian Z component");
         return false;
       }
       assert(writeDescs.size() == 3);
