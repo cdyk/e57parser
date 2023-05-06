@@ -79,3 +79,19 @@ jobs:
         name: linux-clang-executable
         path: make/e57parser
 
+ macos:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - name: Build
+      run: |
+        cd make
+        make
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: macos-executable
+        path: make/rvmparser
