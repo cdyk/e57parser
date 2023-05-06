@@ -39,19 +39,19 @@ namespace {
     }
     static thread_local char buffer[512] = { "[*] " };
 
-    if (4 <= level) {
+    if (5 <= level) {
       assert(false && "Invalid loglevel");
       return;
     }
 
-    const char levels[4] = {'T', 'D', 'W', 'E'};
+    const char levels[5] = {'T', 'D', 'I', 'W', 'E'};
     buffer[1] = levels[level];
 
     constexpr size_t bufferSize = sizeof(buffer) - 4;
     int len = vsnprintf(buffer + 4, bufferSize, msg, arg);
     if (0 <= len && len + 2 <= bufferSize) {
-      buffer[len] = '\n';
-      fwrite(buffer, 1,  len + 1, stderr);
+      buffer[4 + len] = '\n';
+      fwrite(buffer, 1, 4 + len + 1, stderr);
     }
   }
 

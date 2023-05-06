@@ -10,6 +10,7 @@ typedef void(*Logger)(size_t level, const char* msg, va_list arg);
 
 void logTrace(Logger logger, _Printf_format_string_ const char* msg, ...);
 void logDebug(Logger logger, _Printf_format_string_ const char* msg, ...);
+void logInfo(Logger logger, _Printf_format_string_ const char* msg, ...);
 void logWarning(Logger logger, _Printf_format_string_ const char* msg, ...);
 void logError(Logger logger, _Printf_format_string_ const char* msg, ...);
 
