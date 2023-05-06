@@ -205,7 +205,8 @@ bool openE57(E57File& e57, Logger logger, ReadCallback fileRead, void* fileReadD
   Buffer<char> xml;
   xml.accommodate(e57.header.xmlLogicalLength);
 
-  if (!readE57Bytes(&e57, logger, xml.data(), e57.header.xmlPhysicalOffset, e57.header.xmlLogicalLength)) {
+  uint64_t xmlPhysicalOffset = e57.header.xmlPhysicalOffset;
+  if (!readE57Bytes(&e57, logger, xml.data(), xmlPhysicalOffset, e57.header.xmlLogicalLength)) {
     return false;
   }
 
