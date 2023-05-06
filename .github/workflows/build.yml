@@ -15,7 +15,7 @@ jobs:
     runs-on: windows-latest
 
     env:
-      SOLUTION_FILE_PATH: msvc15/e57parser.sln
+      SOLUTION_FILE_PATH: msvc/e57parser.sln
       BUILD_CONFIGURATION: Release
 
     steps:
