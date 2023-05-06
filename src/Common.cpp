@@ -10,11 +10,20 @@
 
 #include "Common.h"
 
+#if defined(_MSC_VER)
+void logTrace(Logger logger, _Printf_format_string_ const char* msg, ...) { va_list ap; va_start(ap, msg); logger(0, msg, ap); va_end(ap); }
+void logDebug(Logger logger, _Printf_format_string_ const char* msg, ...) { va_list ap; va_start(ap, msg); logger(1, msg, ap); va_end(ap); }
+void logInfo(Logger logger, _Printf_format_string_ const char* msg, ...) { va_list ap; va_start(ap, msg); logger(2, msg, ap); va_end(ap); }
+void logWarning(Logger logger, _Printf_format_string_ const char* msg, ...) { va_list ap; va_start(ap, msg); logger(3, msg, ap); va_end(ap); }
+void logError(Logger logger, _Printf_format_string_ const char* msg, ...) { va_list ap; va_start(ap, msg); logger(4, msg, ap); va_end(ap); }
+
+#else
 void logTrace(Logger logger, const char* msg, ...) { va_list ap; va_start(ap, msg); logger(0, msg, ap); va_end(ap); }
 void logDebug(Logger logger, const char* msg, ...) { va_list ap; va_start(ap, msg); logger(1, msg, ap); va_end(ap); }
 void logInfo(Logger logger, const char* msg, ...)  { va_list ap; va_start(ap, msg); logger(2, msg, ap); va_end(ap); }
 void logWarning(Logger logger, const char* msg, ...) { va_list ap; va_start(ap, msg); logger(3, msg, ap); va_end(ap); }
 void logError(Logger logger, const char* msg, ...) { va_list ap; va_start(ap, msg); logger(4, msg, ap); va_end(ap); }
+#endif
 
 void BufferBase::free()
 {
