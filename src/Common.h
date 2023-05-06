@@ -4,15 +4,41 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cstdarg>
 #include <cassert>
 
 typedef void(*Logger)(size_t level, const char* msg, va_list arg);
 
+#if defined(_MSC_VER)
 void logTrace(Logger logger, _Printf_format_string_ const char* msg, ...);
 void logDebug(Logger logger, _Printf_format_string_ const char* msg, ...);
 void logInfo(Logger logger, _Printf_format_string_ const char* msg, ...);
 void logWarning(Logger logger, _Printf_format_string_ const char* msg, ...);
 void logError(Logger logger, _Printf_format_string_ const char* msg, ...);
+
+#elif defined(__clang__)
+__attribute__((__format__(__printf__, 2, 3))) void logTrace(Logger logger, const char* msg, ...);
+__attribute__((__format__(__printf__, 2, 3))) void logDebug(Logger logger, const char* msg, ...);
+__attribute__((__format__(__printf__, 2, 3))) void logInfo(Logger logger, const char* msg, ...);
+__attribute__((__format__(__printf__, 2, 3))) void logWarning(Logger logger, const char* msg, ...);
+__attribute__((__format__(__printf__, 2, 3))) void logError(Logger logger, const char* msg, ...);
+
+#elif defined(__GNUC__)
+void logTrace(Logger logger, const char* msg, ...) __attribute__((format(printf, 2, 3)));
+void logDebug(Logger logger, const char* msg, ...) __attribute__((format(printf, 2, 3)));
+void logInfo(Logger logger, const char* msg, ...) __attribute__((format(printf, 2, 3)));
+void logWarning(Logger logger, const char* msg, ...) __attribute__((format(printf, 2, 3)));
+void logError(Logger logger, const char* msg, ...) __attribute__((format(printf, 2, 3)));
+
+#else
+void logTrace(Logger logger, const char* msg, ...);
+void logDebug(Logger logger, const char* msg, ...);
+void logInfo(Logger logger, const char* msg, ...);
+void logWarning(Logger logger, const char* msg, ...);
+void logError(Logger logger, const char* msg, ...);
+
+#endif
+
 
 struct E57File;
 

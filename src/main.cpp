@@ -22,6 +22,7 @@
 
 #include <cstdlib>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <functional>
 #include <cinttypes>
@@ -31,7 +32,7 @@
 
 namespace {
 
-  size_t logLevel = 1;
+  size_t logLevel = 2;
 
   void logger(size_t level, const char* msg, va_list arg)
   {
@@ -50,9 +51,9 @@ namespace {
 
     constexpr size_t bufferSize = sizeof(buffer) - 4;
     int len = vsnprintf(buffer + 4, bufferSize, msg, arg);
-    if (0 <= len && len + 2 <= bufferSize) {
+    if (0 <= len && size_t(len) + 2 <= bufferSize) {
       buffer[4 + len] = '\n';
-      fwrite(buffer, 1, 4 + len + 1, stderr);
+      fwrite(buffer, 1, size_t(len) + 4 + 1, stderr);
     }
   }
 
@@ -80,7 +81,7 @@ namespace {
       }
       assert(m);
 
-      ptr = static_cast<const char*>(MapViewOfFile(m, FILE_MAP_READ, 0, 0, 0));
+      ptr = MapViewOfFile(m, FILE_MAP_READ, 0, 0, 0);
       if (ptr == nullptr) {
         logError(logger, "MapViewOfFile returned INVALID_HANDLE_VALUE");
         return;
@@ -106,41 +107,41 @@ namespace {
 
     HANDLE h = INVALID_HANDLE_VALUE;
     HANDLE m = INVALID_HANDLE_VALUE;
-    const char* ptr = nullptr;
+    void* ptr = nullptr;
     size_t size = 0;
     bool good = false;
   };
 #else
   struct MemoryMappedFile
   {
-    MemoryMappedFile(const char* path, Logger logger)
+    MemoryMappedFile(const char* path)
     {
       fd = open(path, O_RDONLY);
       if (fd == -1) {
-        logger(2, "%s: open failed: %s", path.c_str(), strerror(errno));
+        logError(logger, "%s: open failed: %s", path, strerror(errno));
         return;
       }
 
       struct stat stat {};
       if (fstat(fd, &stat) != 0) {
-        logger(2, "%s: fstat failed: %s", path.c_str(), strerror(errno));
+        logError(logger, "%s: fstat failed: %s", path, strerror(errno));
         return;
       }
       size = stat.st_size;
 
 #ifdef __linux__
-      const char* ptr = static_cast<const char*>(mmap(nullptr, stat.st_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0));
+      ptr = mmap(nullptr, stat.st_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
 #else
-      const char* ptr = static_cast<const char*>(mmap(nullptr, stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
+      ptr = mmap(nullptr, stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 #endif
       if (ptr == MAP_FAILED) {
-        logger(2, "%s: mmap failed: %s", path.c_str(), strerror(errno));
-        return false;
+        logError(logger, "%s: mmap failed: %s", path, strerror(errno));
+        return;
       }
 
       if (madvise(ptr, stat.st_size, MADV_SEQUENTIAL) != 0) {
-        logger(1, "%s: madvise(MADV_SEQUENTIAL) failed: %s", path.c_str(), strerror(errno));
-        return false;
+        logError(logger, "%s: madvise(MADV_SEQUENTIAL) failed: %s", path, strerror(errno));
+        return;
       }
       good = true;
     }
@@ -149,7 +150,7 @@ namespace {
     {
       if (ptr != MAP_FAILED) {
         if (munmap(ptr, size) != 0) {
-          logger(2, "munmap failed: %s", strerror(errno));
+          logError(logger, "munmap failed: %s", strerror(errno));
         }
         ptr = MAP_FAILED;
       }
@@ -159,7 +160,7 @@ namespace {
       }
     }
 
-    const char* ptr = MAP_FAILED;
+    void* ptr = nullptr;
     size_t size = 0;
     int fd = -1;
     bool good = false;
@@ -174,7 +175,7 @@ namespace {
     if (!mappedFile->good || mappedFile->size < offset || mappedFile->size < offset + size) {
       return View<const char>(nullptr, 0);
     }
-    return View<const char>(mappedFile->ptr + static_cast<size_t>(offset), size);
+    return View<const char>((const char*)mappedFile->ptr + static_cast<size_t>(offset), size);
   }
 
  
@@ -234,6 +235,7 @@ namespace {
         std::fclose(file);
         file = nullptr;
       }
+      return true;
     }
 
     static bool consumeCallback(void* data, size_t pointCount)
@@ -304,7 +306,7 @@ Post bug reports or questions at https://github.com/cdyk/e57parser
       if ((ptr[offset] < '0') || ('9' < ptr[offset])) {
         goto fail;
       }
-      output = 10 * output + static_cast<size_t>(ptr[offset] - '0');
+      output = 10 * output + static_cast<size_t>(ptr[offset]) - static_cast<size_t>('0');
     }
     while (ptr[++offset] != '\0');
     return true;
@@ -435,7 +437,7 @@ int main(int argc, char** argv)
           Buffer<char> xml;
           xml.accommodate(e57.header.xmlLogicalLength);
           uint64_t xmlPhysicalOffset = e57.header.xmlPhysicalOffset;
-          if (!readE57Bytes(&e57, logger, xml.data(), e57.header.xmlPhysicalOffset, e57.header.xmlLogicalLength)) {
+          if (!readE57Bytes(&e57, logger, xml.data(), xmlPhysicalOffset, e57.header.xmlLogicalLength)) {
             success = false;
           }
           else {

@@ -619,7 +619,7 @@ static bool cd_xml_parse_attribute_value(cd_xml_parse_context_t* ctx, cd_xml_str
 
 static bool cd_xml_parse_xml_decl(cd_xml_parse_context_t* ctx, bool is_decl)
 {
-  assert(ctx->matched.kind == is_decl ? CD_XML_TOKEN_XML_DECL_START : CD_XML_TOKEN_PROC_INSTR_START);
+  assert(ctx->matched.kind == (is_decl ? CD_XML_TOKEN_XML_DECL_START : CD_XML_TOKEN_PROC_INSTR_START));
   cd_xml_stringview_t match = { .begin = ctx->matched.text.begin };
   while (ctx->status == CD_XML_STATUS_SUCCESS) {
 

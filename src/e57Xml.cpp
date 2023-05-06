@@ -8,6 +8,8 @@
 #include <cassert>
 #include <vector>
 #include <string>
+#include <limits>
+#include <bit>
 
 namespace {
   
@@ -113,6 +115,7 @@ namespace {
     return true;
   }
 
+#if 0
   bool parseNumber(int32_t& dst, const cd_xml_stringview_t* text)
   {
     const std::string str(text->begin, text->end);
@@ -125,6 +128,7 @@ namespace {
     }
     return true;
   }
+#endif
 
   bool parseNumber(int64_t& dst, const cd_xml_stringview_t* text)
   {
@@ -251,6 +255,22 @@ namespace {
         logError(ctx.logger, "Unexpected %s", elementKindString[static_cast<size_t>(elem->kind)]);
         return false;
       }
+      break;
+
+    case Element::Kind::Unknown:
+    case Element::Kind::E57Root:
+    case Element::Kind::Data3D:
+    case Element::Kind::VectorChild:
+    case Element::Kind::Name:
+    case Element::Kind::XMin:
+    case Element::Kind::XMax:
+    case Element::Kind::YMin:
+    case Element::Kind::YMax:
+    case Element::Kind::ZMin:
+    case Element::Kind::ZMax:
+    case Element::Kind::Prototype:
+    case Element::Kind::Images2D:
+    case Element::Kind::Count:
       break;
     }
 

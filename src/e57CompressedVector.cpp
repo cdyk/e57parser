@@ -186,7 +186,7 @@ namespace {
     char* end = ctx.args.buffer.data + ctx.args.buffer.size;
     size_t stride = writeDesc.stride;
 
-    size_t moo = ctx.args.buffer.size;
+    //size_t moo = ctx.args.buffer.size;
 
     if (comp.type == Component::Type::Integer) {
       const uint8_t w = comp.integer.bitWidth;
