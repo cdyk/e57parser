@@ -33,6 +33,6 @@ jobs:
     - uses: actions/upload-artifact@v3
       with:
         name: windows-executable
-        path: msvc15/x64/Release/e57parser.exe
+        path: msvc/x64/Release/e57parser.exe
 
 
