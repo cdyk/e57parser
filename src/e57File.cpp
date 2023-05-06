@@ -7,6 +7,7 @@
 #include <cinttypes>
 #include <algorithm>
 #include <cassert>
+#include <limits>
 
 #include "Common.h"
 #include "e57File.h"

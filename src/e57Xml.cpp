@@ -8,6 +8,8 @@
 #include <cassert>
 #include <vector>
 #include <string>
+#include <limits>
+#include <bit>
 
 namespace {
   
