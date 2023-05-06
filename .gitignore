@@ -34,3 +34,6 @@
 
 msvc/.vs
 msvc/x64
+
+make/obj
+make/e57parser
