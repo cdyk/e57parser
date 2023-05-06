@@ -256,6 +256,22 @@ namespace {
         return false;
       }
       break;
+
+    case Element::Kind::Unknown:
+    case Element::Kind::E57Root:
+    case Element::Kind::Data3D:
+    case Element::Kind::VectorChild:
+    case Element::Kind::Name:
+    case Element::Kind::XMin:
+    case Element::Kind::XMax:
+    case Element::Kind::YMin:
+    case Element::Kind::YMax:
+    case Element::Kind::ZMin:
+    case Element::Kind::ZMax:
+    case Element::Kind::Prototype:
+    case Element::Kind::Images2D:
+    case Element::Kind::Count:
+      break;
     }
 
     //logDebug(ctx.logger, "< %.*s", int(name->end - name->begin), name->begin);
