@@ -398,8 +398,8 @@ bool readE57Points(const E57File* e57, Logger logger, const ReadPointsArgs& args
   };
 
 
-  logger(0, "Reading compressed vector: fileOffset=0x%zx recordCount=0x%zx",
-         ctx.pts.fileOffset, ctx.pts.recordCount);
+  logger(0, "Reading compressed vector %zu: fileOffset=0x%zx recordCount=0x%zx",
+         args.pointSetIndex, ctx.pts.fileOffset, ctx.pts.recordCount);
 
   // CompressedVectorSectionHeader:
   // -----------------------------

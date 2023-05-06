@@ -273,7 +273,7 @@ int main(int argc, char** argv)
           .consumeCallback = PtsWriter::consumeCallback,
           .consumeCallbackData = &writer,
           .pointCapacity = writer.pointCapacity,
-          .pointSetIndex = 0
+          .pointSetIndex = k
         };
         if (!readE57Points(&e57, logger, readPointsArgs)) {
           success = false;
